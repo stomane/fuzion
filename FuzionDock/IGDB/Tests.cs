@@ -11,7 +11,9 @@ namespace Fuzion.IGDB
     {
         public static async void IGDBNugetTest(string name)
         {
-            var igdb = new global::IGDB.IGDBClient("a65661d40ccb4f78fbf311d8ba1d6559","ADD_CLIENT_SECRET_HERE");
+            var igdb = new global::IGDB.IGDBClient(
+                Environment.GetEnvironmentVariable("IGDB_CLIENT_ID") ?? "",
+                Environment.GetEnvironmentVariable("IGDB_CLIENT_SECRET") ?? "");
 
 
             // Simple fields

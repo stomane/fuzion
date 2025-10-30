@@ -242,7 +242,11 @@ namespace Fuzion.GameDeals
             //// Get the top post from a subreddit.
             //var topPosts = askReddit.Posts.Best;
             var oauth = new OAuthToken();
-            var r = new Reddit.RedditClient("APpovGWsdSv9EQ", oauth.RefreshToken, null, oauth.AccessToken);
+            var r = new Reddit.RedditClient(
+                Environment.GetEnvironmentVariable("REDDIT_CLIENT_ID") ?? "", 
+                oauth.RefreshToken, 
+                null, 
+                oauth.AccessToken);
             // Get info on another subreddit.
             var askReddit = r.Subreddit("GameDeals").About();
 
