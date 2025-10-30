@@ -1,0 +1,14 @@
+﻿<UserControl x:Class="Fuzion.CustomUIElements.FuzionCloseButtonControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Fuzion.CustomUIElements"
+             mc:Ignorable="d" 
+             d:DesignHeight="30" d:DesignWidth="42">
+    <Grid>
+        <Border CornerRadius="0,10,0,0" BorderThickness="0" Style="{DynamicResource FuzionBorderCloseButton}">
+            <Image Margin="8" Opacity="1" Source="/Fuzion;component/Assets/32x/slimCloseIcon.png"/>
+        </Border>
+    </Grid>
+</UserControl>

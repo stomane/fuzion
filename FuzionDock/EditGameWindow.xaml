@@ -1,0 +1,442 @@
+﻿<Window x:Class="Fuzion.EditGameWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:properties="clr-namespace:Fuzion.Properties"
+        xmlns:local="clr-namespace:Fuzion"
+        mc:Ignorable="d"
+        Title="EditGameWindow" 
+        Height="250" 
+        Width="390" 
+        ResizeMode="NoResize" 
+        WindowStartupLocation="Manual" 
+        WindowStyle="None" 
+        AllowsTransparency="True" 
+        Background="{x:Null}" 
+        Loaded="EditGameWindow_Loaded"
+        Mouse.MouseDown="Window_Drag" 
+        Closed="Window_Closed"
+        BorderThickness="0" 
+        MouseLeftButtonUp="Window_MouseLeftButtonUp">
+    <Window.Resources>
+        <Style x:Key="RoundedTextBox" TargetType="TextBox">
+            <!-- Textbox rounding -->
+            <Style.Resources>
+                <Style TargetType="{x:Type Border}">
+                    <Setter Property="CornerRadius" Value="0,0,4,4" />
+                </Style>
+            </Style.Resources>
+        </Style>
+        <Style x:Key="ChangeIconButton" TargetType="Image">
+            <Style.Triggers>
+                <Trigger Property="Image.IsMouseOver" Value="true">
+                    <Trigger.Setters>
+                        <Setter Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect Color="White" Opacity="100" ShadowDepth="0" BlurRadius="20" />
+                            </Setter.Value>
+                        </Setter>
+                    </Trigger.Setters>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    <Window.Triggers>
+        <!--Too GPU intensive on multiple windows, add as an option-->
+        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+            <!--<BeginStoryboard Storyboard="{DynamicResource BorderBackgroundColorAnimation}"/>-->
+        </EventTrigger>
+    </Window.Triggers>
+    <Grid HorizontalAlignment="Left" VerticalAlignment="Top">
+        <Popup PlacementTarget="{Binding ElementName=changeIcon}" Name="Test" Margin="116,36,110,125" PopupAnimation="Slide" Placement="Bottom" VerticalOffset="20" HorizontalAlignment="Center" VerticalAlignment="Top" >
+            <Image Source="Assets/removeFolder.png" HorizontalAlignment="Center"/>
+        </Popup>
+        <!--<Border Name="FakeBlurBorder" 
+                CornerRadius="{Binding ElementName=animatedBorder, Path=CornerRadius}"
+                Height="{Binding ElementName=animatedBorder, Path=ActualHeight}"
+                Margin="{Binding ElementName=animatedBorder, Path=Margin}"
+                VerticalAlignment="Top" Opacity="0.9">
+            <Border.Background>
+                <ImageBrush ImageSource="Assets/fake_blur.png" Stretch="UniformToFill"/>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect Opacity="{StaticResource DropShadow.Opacity}" RenderingBias="Performance"/>
+            </Border.Effect>
+        </Border>-->
+        <Border MouseDown="CloseWindowOn_MiddleMouseDown"
+                x:Name="animatedBorder"
+                CornerRadius="{StaticResource Window.CornerRadius}"
+                BorderThickness="1"
+                BorderBrush="DimGray">
+            <Border.Background>
+                <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <LinearGradientBrush.RelativeTransform>
+                        <TransformGroup>
+                            <ScaleTransform CenterY="0.5" CenterX="0.5"/>
+                            <SkewTransform CenterY="0.5" CenterX="0.5"/>
+                            <RotateTransform CenterY="0.5" CenterX="0.5" Angle="65"/>
+                            <TranslateTransform/>
+                        </TransformGroup>
+                    </LinearGradientBrush.RelativeTransform>
+                    <GradientStop Color="#FF05323A" Offset="0"/>
+                    <GradientStop Color="#FF0C443B" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect Opacity="{StaticResource DropShadow.Opacity}" RenderingBias="Performance"/>
+            </Border.Effect>
+            <Border BorderBrush="White"
+                    BorderThickness="0" 
+                    Height="25" 
+                    VerticalAlignment="Top"
+                    Width="{Binding ActualWidth, ElementName=displayName}"
+                    Background="#19FFFFFF"
+                    CornerRadius="0,0,10,10"
+                    Margin="0" 
+                    HorizontalAlignment="Center"
+                    Padding="0">
+            </Border>
+        </Border>
+        <Border Name="HighlightWindowBorder"
+                CornerRadius="{Binding ElementName=animatedBorder, Path=CornerRadius}"
+                Height="{Binding ElementName=animatedBorder, Path=ActualHeight}"
+                Margin="{Binding ElementName=animatedBorder, Path=Margin}"
+                VerticalAlignment="Top" 
+                Opacity="0"
+                Background="White"
+                IsHitTestVisible="False">
+        </Border>
+        <Border Width="42" 
+                Height="30" 
+                CornerRadius="0"
+                x:Name="CloseWindow" 
+                MouseLeftButtonDown="CloseWindow_Click" 
+                BorderThickness="0" 
+                Style="{StaticResource FuzionBorderCloseButton}"
+                VerticalAlignment="Top" 
+                HorizontalAlignment="Right">
+            <Image Margin="8" 
+                   Source="Assets\32x\slimCloseIcon.png" 
+                   Opacity="1"/>
+        </Border>
+        <Button Click="DefaultReturnButton_Click"
+                Visibility="Visible" 
+                Background="Transparent" 
+                IsDefault="True" 
+                x:Name="DefaultReturnButton" 
+                Height="20" 
+                Content="" 
+                Margin="392,10,-38,210" 
+                BorderBrush="#00000000"
+                Foreground="#00000000"
+                IsTabStop="False" 
+                Focusable="False"/>
+        <Button Click="DefaultCancelButton_Click"
+                Visibility="Visible" 
+                Background="Transparent" 
+                IsCancel="True"
+                x:Name="DefaultCancelButton"
+                Height="20" 
+                Content="" 
+                Margin="392,39,-38,181" 
+                BorderBrush="#00000000"
+                Foreground="#00000000" 
+                IsTabStop="False" 
+                Focusable="False"/>
+        <Label ToolTip="Double-click to change name. Affects online icons" 
+               MaxWidth="330" 
+               FontFamily="Lato Light" 
+               Foreground="White" 
+               HorizontalAlignment="Center" 
+               VerticalAlignment="Top" 
+               FontSize="16" 
+               Margin="40,0" 
+               HorizontalContentAlignment="Center" 
+               VerticalContentAlignment="Center">
+            <Grid>
+                <TextBlock Visibility="Visible" 
+                           MouseDown="displayName_MouseDown" 
+                           HorizontalAlignment="Center" 
+                           Height="25" 
+                           VerticalAlignment="Center" 
+                           x:Name="displayName" 
+                           Text="0" 
+                           TextTrimming="CharacterEllipsis" 
+                           Margin="0,2,0,0" 
+                           Padding="10,0" 
+                           Foreground="White"/>
+                <TextBox BorderThickness="0" 
+                         TextChanged="DockNameTextBox_TextChanged" 
+                         Visibility="Hidden" 
+                         BorderBrush="Transparent" 
+                         CaretBrush="White" 
+                         MaxLines="1" 
+                         MaxWidth="280" 
+                         x:Name="DockNameTextBox" 
+                         Text="0" 
+                         HorizontalAlignment="Center" 
+                         Height="25" 
+                         Background="Transparent" 
+                         VerticalAlignment="Center" 
+                         Margin="0,2,0,0" 
+                         Padding="10,0" 
+                         Foreground="White" 
+                         SelectionBrush="#FF00A6D7"/>
+            </Grid>
+        </Label>
+        <Image ToolTip="Revert icon" 
+               Style="{StaticResource FuzionOpacityButton}" 
+               x:Name="revertIcon" 
+               Mouse.MouseDown="RevertIcon_Click" 
+               Source="Assets/undoArrow.png" 
+               Width="25" 
+               Height="25" 
+               Margin="19,40,346,185" 
+               RenderOptions.BitmapScalingMode="HighQuality" />
+        <Image ToolTip="Revert to System Icon" 
+            Style="{StaticResource FuzionOpacityButton}" 
+            x:Name="revertSystemIcon" 
+            Mouse.MouseDown="RevertSystemIcon_MouseDown"
+            Source="Assets/64x/reset_system_64x.png" 
+            Width="25" 
+            Height="25"
+            RenderOptions.BitmapScalingMode="HighQuality" Margin="19,145,346,80" />
+        <CheckBox IsChecked="{Binding CropManuallyAddedIcons, Mode=TwoWay, Source={x:Static properties:Settings.Default}}"
+                                  Style="{StaticResource WidgetCheckBox}"
+                                  x:Name="CropManuallyAddedIcons"
+                                  BorderThickness="0"
+                                  HorizontalContentAlignment="Stretch"
+                                  VerticalContentAlignment="Stretch"
+                                  Content=""
+                                  FontSize="14"
+                  Width="25"
+                  Height="25" Margin="19,91,346,134"
+                  ToolTip="Crops and frames manually added icons if they don't match the circular design"/>
+
+        <!--Mouse.MouseDown="ShowOnlineIcons_Click"-->
+        <!-- Disabled through visibility until I create my icon database-->
+        <Image Visibility="Hidden" 
+                ToolTip="Toggle online icons. Affected by name" 
+               Style="{StaticResource FuzionOpacityButton}" 
+               x:Name="onlineIcon" 
+
+               Source="Assets/onlineIconIcon.png" 
+               Width="25" 
+               Height="25" 
+               Margin="14,140,341,75" 
+               RenderOptions.BitmapScalingMode="HighQuality" />
+        <Image ToolTip="Change icon"
+               Style="{StaticResource ChangeIconButton}" 
+               x:Name="changeIcon" 
+               Width="128" 
+               Height="128" 
+               Margin="42,36,210,76" 
+               Mouse.MouseDown="ChangeIcon_Click" 
+               RenderOptions.BitmapScalingMode="HighQuality"/>
+        <CheckBox ToolTip="Assume control"
+                  x:Name="controlledCheckbox"
+                  Checked="Controlled_Checked"
+                  Unchecked="Controlled_Unchecked"
+                  IsChecked="True"
+                  BorderThickness="0"
+                  VerticalContentAlignment="Stretch"
+                  HorizontalContentAlignment="Stretch"
+                  Style="{DynamicResource WidgetCheckBox}" Margin="183,36,172,195"/>
+        <Label Content="Controlled by Fuzion"
+               FontFamily="Lato Light"
+               FontSize="14"
+               Foreground="White"
+               Margin="218,33,36,190"
+               VerticalContentAlignment="Center"
+               HorizontalContentAlignment="Left"/>
+        <ComboBox Style="{StaticResource FuzionTransparentComboBox}" 
+                  BorderThickness="0" 
+                  DropDownOpened="pathTypeSelector_DropDownOpened"
+                  DropDownClosed="pathTypeSelector_DropDownClosed"
+                  IsVisibleChanged="PathTypeSelector_IsVisibleChanged"
+                  x:Name="pathTypeSelector" 
+                  Height="25" 
+                  Margin="183,55,45,160"
+                  FontFamily="Lato Light"
+                  SelectionChanged="PathTypeSelector_SelectionChanged"
+                  VerticalContentAlignment="Center"
+                  BorderBrush="White" 
+                  Background="#0CFFFFFF" 
+                  Foreground="White">
+            <!--<ComboBoxItem Content="Path" Style="{StaticResource FuzionComboBoxItemGreen}"/>
+            <ComboBoxItem Content="URI" Style="{StaticResource FuzionComboBoxItemGreen}"/>-->
+        </ComboBox>
+        <TextBox TextChanged="pathTextBox_TextChanged" 
+                 CaretBrush="White" 
+                 BorderThickness="0" 
+                 GotFocus="TextBoxFocused" 
+                 x:Name="pathTextBox" 
+                 Text="Path" 
+                 Height="25" 
+                 Margin="183,85,45,130" 
+                 FontFamily="Lato Light" 
+                 VerticalContentAlignment="Center" 
+                 Foreground="White" 
+                 Background="#0CFFFFFF" >
+            <TextBox.Effect >
+                <BlurEffect x:Name="PathTextBoxBlurEffect" 
+                            Radius="0" 
+                            KernelType="Gaussian"/>
+            </TextBox.Effect>
+        </TextBox>
+        <Image ToolTip="Select path" 
+               Style="{StaticResource FuzionOpacityButton}"
+               x:Name="selectPathButton" 
+               Mouse.MouseDown="SelectPath_MouseDown"
+               Source="Assets/folderIcon.png"
+               Width="25" 
+               Height="25"
+               Margin="340,85,15,130" />
+        <TextBox TextChanged="argumentsTextBox_TextChanged" 
+                 CaretBrush="White" 
+                 BorderThickness="0" 
+                 GotFocus="TextBoxFocused" 
+                 x:Name="argumentsTextBox" 
+                 Text="Arguments" 
+                 Height="25" 
+                 Margin="183,115,45,100" 
+                 FontFamily="Lato Light" 
+                 VerticalContentAlignment="Center" 
+                 Style="{StaticResource RoundedTextBox}" 
+                 Foreground="White" 
+                 Background="#0CFFFFFF">
+            <TextBox.Effect >
+                <BlurEffect x:Name="ArgumentsTextBoxBlurEffect" 
+                            Radius="0" 
+                            KernelType="Gaussian"/>
+            </TextBox.Effect>
+        </TextBox>
+        <ComboBox Style="{StaticResource FuzionTransparentComboBox}" 
+                  BorderThickness="0" 
+                  DropDownOpened="LauncherSelector_DropDownOpened" 
+                  DropDownClosed="LauncherSelector_DropDownClosed" 
+                  IsVisibleChanged="LauncherSelector_IsVisibleChanged" 
+                  x:Name="LauncherSelector" 
+                  Height="25" 
+                  Margin="183,144,45,71" 
+                  FontFamily="Lato Light" 
+                  SelectionChanged="LauncherSelector_SelectionChanged" 
+                  VerticalContentAlignment="Center" 
+                  BorderBrush="White" 
+                  Background="#0CFFFFFF" 
+                  Foreground="White">
+            <!--<ComboBoxItem Content="Path" Style="{StaticResource FuzionComboBoxItemGreen}"/>
+            <ComboBoxItem Content="URI" Style="{StaticResource FuzionComboBoxItemGreen}"/>-->
+        </ComboBox>
+        <Image ToolTip="Save"
+               Style="{StaticResource FuzionOpacityButton}"
+               x:Name="saveButton" 
+               Mouse.MouseDown="SaveButton_MouseDown" 
+               Width="24" 
+               Height="24" 
+               Source="Assets/saveIcon.png" 
+               Margin="341,145,15,71"/>
+        <Grid x:Name="onlineIconChooserGrid" 
+              Height="60" 
+              Margin="5,0,5,9" 
+              VerticalAlignment="Bottom">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <Rectangle x:Name="Rect0" 
+                       Grid.Column="0" 
+                       Visibility="Visible"
+                       Fill="#FF30C54B" 
+                       RadiusY="5"
+                       RadiusX="5" 
+                       Width="10"
+                       Height="10"
+                       RenderTransformOrigin="0.5,0.5"
+                       Stroke="Transparent">
+                <Rectangle.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </Rectangle.RenderTransform>
+                <Rectangle.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard Storyboard="{StaticResource MorphAnimation}"/>
+                    </EventTrigger>
+                </Rectangle.Triggers>
+            </Rectangle>
+            <Rectangle x:Name="Rect1" Grid.Column="1" Visibility="Visible" Fill="#FF30C54B" RadiusY="5" RadiusX="5" Width="10" Height="10" RenderTransformOrigin="0.5,0.5" Stroke="Transparent">
+                <Rectangle.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </Rectangle.RenderTransform>
+                <Rectangle.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard Storyboard="{StaticResource MorphAnimation}"/>
+                    </EventTrigger>
+                </Rectangle.Triggers>
+            </Rectangle>
+            <Rectangle x:Name="Rect2" Grid.Column="2" Visibility="Visible" Fill="#FF30C54B" RadiusY="5" RadiusX="5" Width="10" Height="10" RenderTransformOrigin="0.5,0.5" Stroke="Transparent">
+                <Rectangle.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </Rectangle.RenderTransform>
+                <Rectangle.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard Storyboard="{StaticResource MorphAnimation}"/>
+                    </EventTrigger>
+                </Rectangle.Triggers>
+            </Rectangle>
+            <Rectangle x:Name="Rect3" Grid.Column="3" Visibility="Visible" Fill="#FF30C54B" RadiusY="5" RadiusX="5" Width="10" Height="10" RenderTransformOrigin="0.5,0.5" Stroke="Transparent">
+                <Rectangle.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </Rectangle.RenderTransform>
+                <Rectangle.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard Storyboard="{StaticResource MorphAnimation}"/>
+                    </EventTrigger>
+                </Rectangle.Triggers>
+            </Rectangle>
+            <Rectangle x:Name="Rect4" Grid.Column="4" Visibility="Visible" Fill="#FF30C54B" RadiusY="5" RadiusX="5" Width="10" Height="10" RenderTransformOrigin="0.5,0.5" Stroke="Transparent">
+                <Rectangle.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </Rectangle.RenderTransform>
+                <Rectangle.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard Storyboard="{StaticResource MorphAnimation}"/>
+                    </EventTrigger>
+                </Rectangle.Triggers>
+            </Rectangle>
+            <Image Grid.Column="0" SizeChanged="OnlineImage_SizeChanged" Name="OnlineImage0" Style="{StaticResource FuzionOpacityButton}" Mouse.MouseDown="SetFromOnlineImage_Click" Width="58" Height="58" RenderOptions.BitmapScalingMode="HighQuality" />
+            <Image Grid.Column="1" SizeChanged="OnlineImage_SizeChanged" Name="OnlineImage1" Style="{StaticResource FuzionOpacityButton}" Mouse.MouseDown="SetFromOnlineImage_Click" Width="58" Height="58" RenderOptions.BitmapScalingMode="HighQuality" />
+            <Image Grid.Column="2" SizeChanged="OnlineImage_SizeChanged" Name="OnlineImage2" Style="{StaticResource FuzionOpacityButton}" Mouse.MouseDown="SetFromOnlineImage_Click" Width="58" Height="58" RenderOptions.BitmapScalingMode="HighQuality" />
+            <Image Grid.Column="3" SizeChanged="OnlineImage_SizeChanged" Name="OnlineImage3" Style="{StaticResource FuzionOpacityButton}" Mouse.MouseDown="SetFromOnlineImage_Click" Width="58" Height="58" RenderOptions.BitmapScalingMode="HighQuality" />
+            <Image Grid.Column="4" SizeChanged="OnlineImage_SizeChanged" Name="OnlineImage4" Style="{StaticResource FuzionOpacityButton}" Mouse.MouseDown="SetFromOnlineImage_Click" Width="58" Height="58" RenderOptions.BitmapScalingMode="HighQuality" />
+        </Grid>
+    </Grid>
+</Window>

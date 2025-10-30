@@ -1,0 +1,493 @@
+﻿<Window x:Class="Fuzion.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Fuzion"
+        xmlns:properties="clr-namespace:Fuzion.Properties"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        mc:Ignorable="d"
+        Title="Fuzion Dock" 
+        Loaded="MainWindow_Loaded" 
+        x:Name="mainWindow" 
+        Height="Auto" 
+        Width="Auto"
+        WindowStyle="None" 
+        ResizeMode="NoResize" 
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        SizeToContent="WidthAndHeight" 
+        HorizontalContentAlignment="Center" 
+        VerticalContentAlignment="Center" 
+        WindowStartupLocation="Manual" 
+        LostFocus="MainWindow_LostFocus" 
+        GotFocus="MainWindow_GotFocus" 
+        Activated="MainWindow_Activated" 
+        Deactivated="MainWindow_Deactivated" 
+        StateChanged="MainWindow_StateChanged" 
+        Closed="mainWindow_Closed" 
+        DpiChanged="mainWindow_DpiChanged"
+        Mouse.MouseMove="MainWindow_MouseMove"
+        Mouse.MouseUp="mainWindow_MouseUp"
+        MouseLeave="mainWindow_MouseLeave"
+        PreviewKeyDown="mainWindow_PreviewKeyDown"
+        IsKeyboardFocusWithinChanged="mainWindow_IsKeyboardFocusWithinChanged">
+    <Window.Resources>
+        <local:ContextMenuEditHeader x:Key="ContextMenuEditHeaderConverter"/>
+        <Storyboard x:Key="ScrollAnimation" Storyboard.Target="{Binding ElementName=Mediator}" Storyboard.TargetProperty="{Binding ElementName=Mediator, Path=ScrollableWidthMultiplierProperty}">
+            <DoubleAnimation From="{Binding ElementName=Mediator, Path=ScrollableWidthMultiplier}" To="0.5">
+            </DoubleAnimation>
+        </Storyboard>
+        <ContextMenu Style="{StaticResource FuzionContextMenu}" x:Key="GlobalContextMenu" Background="#FF2E2E2E">
+            <MenuItem Header="_Add" Click="AddGameButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/add.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="_Remove" Click="RemoveGameButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/remove.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem DataContext="{Binding mainWindow}"
+                      Header="_Edit"
+                      Click="EditGameButton_Click"
+                      FontFamily="Lato Light"
+                      Foreground="White"
+                      Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <!--<MenuItem.Header>
+                    <TextBlock>
+                        <Span>
+                            <Run Text="_Edit" />
+                        </Span>
+                        <Span FontWeight="Bold" FontStyle="Italic">
+                            <Run Text="Bold text" FontWeight="Bold" FontStyle="Italic"/>
+                        </Span>
+                    </TextBlock>
+                </MenuItem.Header>-->
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/edit.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Re_scan" Click="RescanButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/rescan.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Locked"
+                      IsCheckable="True" 
+                      IsChecked="{Binding Source={x:Static properties:Settings.Default}, Path=IsGridLocked, Mode=TwoWay}" 
+                      FontFamily="Lato Light"
+                      FontSize="14"
+                      Foreground="White" 
+                      Template="{DynamicResource FuzionMenuItem}">
+            </MenuItem>
+            <MenuItem Header="Se_ttings" Click="SettingsButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/settings.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <!--<MenuItem Header="Uninstall" Click="UninstallButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14"/>-->
+            <MenuItem Header="E_xit" Click="ExitDockButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/exit.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+        </ContextMenu>
+        <ContextMenu Style="{StaticResource FuzionContextMenu}" x:Key="DummyButtonContextMenu" Background="#FF2E2E2E">
+            <MenuItem Header="_Add" Click="AddGameButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/add.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Re_scan" Click="RescanButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/rescan.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Se_ttings" Click="SettingsButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/settings.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="E_xit" Click="ExitButton_Click" FontFamily="Lato Light" Foreground="White" Template="{DynamicResource FuzionMenuItem}" FontSize="14">
+                <MenuItem.Icon>
+                    <Image Source="Assets/32x/exit.png"/>
+                </MenuItem.Icon>
+            </MenuItem>
+        </ContextMenu>
+        <Style x:Key="GameButtonStyleZoom" TargetType="Image">
+            <Style.Triggers>
+                <EventTrigger RoutedEvent="Image.MouseEnter">
+                    <EventTrigger.Actions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Width" 
+                To="128" Duration="0:0:0.1" />
+                                <DoubleAnimation Storyboard.TargetProperty="Height" 
+                To="128" Duration="0:0:0.1" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger.Actions>
+                </EventTrigger>
+                <EventTrigger RoutedEvent="Image.MouseLeave">
+                    <EventTrigger.Actions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Width" 
+                To="108" Duration="0:0:0.1" />
+                                <DoubleAnimation Storyboard.TargetProperty="Height" 
+                To="108" Duration="0:0:0.1" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger.Actions>
+                </EventTrigger>
+                <EventTrigger RoutedEvent="MouseDown">
+                    <EventTrigger.Actions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" 
+                To="0" Duration="0:0:1" AutoReverse="True"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger.Actions>
+                </EventTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Storyboard x:Key="LoaderBackgroundFadeTop">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[3].(TranslateTransform.Y)" Storyboard.TargetName="image">
+                <EasingDoubleKeyFrame KeyTime="0" Value="-49.5"/>
+                <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="-1.5"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[3].(TranslateTransform.Y)" Storyboard.TargetName="loadingLabel">
+                <EasingDoubleKeyFrame KeyTime="0" Value="-49.5"/>
+                <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="-1.5"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="image">
+                <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="1"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="loadingLabel">
+                <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="1"/>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+        <local:PercentageOfElement x:Key="PercentageOfElementConverter"/>
+        <local:ScrollViewerBackgroundColor x:Key="ScrollViewerBackgroundColorConverter"/>
+        <sys:Double x:Key="10%">0.1</sys:Double>
+    </Window.Resources>
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+            <!--<BeginStoryboard>
+                <BeginStoryboard.Storyboard>
+                    <Storyboard>
+                        -->
+            <!--Animate Scroll Viewer to middle position when layout starts -->
+            <!--
+                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Mediator" Storyboard.TargetProperty="ScrollableWidthMultiplier">
+                            <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                            <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="0"/>
+                            <EasingDoubleKeyFrame KeyTime="0:0:0.21" Value="0.5"/>
+                        </DoubleAnimationUsingKeyFrames>
+                    </Storyboard>
+                </BeginStoryboard.Storyboard>
+            </BeginStoryboard>-->
+        </EventTrigger>
+    </Window.Triggers>
+
+    <!-- Background="#01000000" is non transparent transparent  -->
+    <!--PreviewMouseWheel="GridScrollViewer_PreviewMouseWheel"-->
+    <!--<Border x:Name="ScrollViewerFadeBorder" Background="Transparent">-->
+    <!--Obsolete Code Old Loading Borders
+                    <Border Visibility="Visible" x:Name="LoadingBorder" CornerRadius="0,0,10,10" Width="300" Height="32" HorizontalAlignment="Center" VerticalAlignment="Top">
+                        <Border.Background>
+                            <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                <LinearGradientBrush.RelativeTransform>
+                                    <TransformGroup>
+                                        <ScaleTransform CenterY="0.5" CenterX="0.5"/>
+                                        <SkewTransform CenterY="0.5" CenterX="0.5"/>
+                                        <RotateTransform CenterY="0.5" CenterX="0.5" Angle="65"/>
+                                        <TranslateTransform/>
+                                    </TransformGroup>
+                                </LinearGradientBrush.RelativeTransform>
+                                <GradientStop Color="#FF18BF5C" Offset="0"/>
+                                <GradientStop Color="#FF58A7D4" Offset="1"/>
+                                <GradientStop Color="#FF1FDEDE" Offset="0.5"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <Border Visibility="Visible" Name="BorderOverlay" CornerRadius="{Binding CornerRadius,ElementName=LoadingBorder}" Width="300" Height="32" HorizontalAlignment="Center" VerticalAlignment="Top" Background="Black" Opacity="0.3" />
+                    <Label Visibility="Visible" x:Name="loadingLabel" Content="Fuzion" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" FontFamily="Roboto Light" FontSize="18" Foreground="White" RenderTransformOrigin="0.5,0.5"  >
+                        <Label.LayoutTransform>
+                            <TransformGroup>
+                                <ScaleTransform CenterX="0.5" CenterY="0.5"/>
+                                <SkewTransform CenterX="0.5" CenterY="0.5"/>
+                                <RotateTransform CenterX="0.5" CenterY="0.5"/>
+                                <TranslateTransform/>
+                            </TransformGroup>
+                        </Label.LayoutTransform>
+                        <Label.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform/>
+                                <SkewTransform/>
+                                <RotateTransform/>
+                                <TranslateTransform/>
+                            </TransformGroup>
+                        </Label.RenderTransform>
+                    </Label>
+
+                     Trigger to start grid scrolling animation when loaded 
+                    
+            <Grid.Triggers>
+                <EventTrigger RoutedEvent="Grid.Loaded">
+                    <BeginStoryboard>
+                        <BeginStoryboard.Storyboard>
+                             
+                    Animate back and forth forever
+                     
+                            <Storyboard AutoReverse="True" RepeatBehavior="Forever">
+                                 
+                    Animate from top to bottom
+                     
+                                <DoubleAnimation Storyboard.TargetName="Mediator" Storyboard.TargetProperty="ScrollableWidthMultiplier"
+                            From="0"
+                            To="1"
+                            Duration="0:0:1">
+                                    <DoubleAnimation.EasingFunction>
+                                         
+                    Ease in and out
+                     
+                                        <ExponentialEase EasingMode="EaseInOut"/>
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard.Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </Grid.Triggers>-->
+
+
+    <Grid x:Name="MainParent" Background="Transparent" Focusable="False">
+        <!--Rows for top and bottom position-->
+        <Grid.RowDefinitions>
+            <RowDefinition Name="DockLocationBottomRow" Height="Auto"/>
+            <RowDefinition Name="DockRow" Height="Auto"/>
+            <RowDefinition Name="DockLocationTopRow" Height="Auto"/>
+        </Grid.RowDefinitions>
+        <!--Columns for left and right position-->
+        <!--<Grid.ColumnDefinitions>
+            <ColumnDefinition Name="DockLocationLeft" Width="0"/>
+            <ColumnDefinition Name="DockRowLeftRight" Width="0"/>
+            <ColumnDefinition Name="DockLocationRight" Width="0"/>
+        </Grid.ColumnDefinitions>-->
+        <ScrollViewer
+            PanningMode="HorizontalOnly"
+            Grid.Row="1"
+            AllowDrop="True"
+            PreviewKeyDown="GridScrollViewer_PreviewKeyDown"
+            DragEnter="GridScrollViewer_DragEnter"
+            Loaded="GridScrollViewer_Loaded"
+            HorizontalContentAlignment="Center"
+            Background="{Binding Converter={StaticResource ScrollViewerBackgroundColorConverter}}"
+            x:Name="GridScrollViewer" 
+            HorizontalScrollBarVisibility="Hidden" 
+            VerticalScrollBarVisibility="Hidden" 
+            PreviewMouseWheel="GridScrollViewer_PreviewMouseWheel"
+            ScrollChanged="GridScrollViewer_ScrollChanged"
+            Focusable="False" 
+            FocusVisualStyle="{x:Null}"
+            >
+            <!--local:AdvancedZooming.KeepInCenter="True"-->
+            
+            <!--The content we are scrolling is the grid with the offsets and the dock in the  middle col-->
+            <Grid x:Name="GridScrollOffsetParent">
+                <!--Columns for top and bottom position-->
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Name="OffsetBefore"
+                                      Width="{Binding ActualWidth,  ElementName=MainParent, Converter={StaticResource PercentageOfElementConverter}, ConverterParameter={StaticResource 10%}}"/>
+                    <ColumnDefinition Name="MiddleGrid" Width="*"/>
+                    <ColumnDefinition Name="OffsetAfter" 
+                                      Width="{Binding ActualWidth,  ElementName=MainParent, Converter={StaticResource PercentageOfElementConverter}, ConverterParameter={StaticResource 10%}}"/>
+                </Grid.ColumnDefinitions>
+             
+                <!--Rows for left and right position-->
+                <!--<Grid.RowDefinitions>
+                    <RowDefinition Name="OffsetBeforeLR"
+                                      Height="{Binding ActualHeight,  ElementName=MainParent, Converter={StaticResource PercentageOfElementConverter}, ConverterParameter={StaticResource 10%}}"/>
+                    <RowDefinition Name="MiddleGridLR" Height="*"/>
+                    <RowDefinition Name="OffsetAfterLR" 
+                                      Height="{Binding ActualHeight,  ElementName=MainParent, Converter={StaticResource PercentageOfElementConverter}, ConverterParameter={StaticResource 10%}}"/>
+                </Grid.RowDefinitions>-->
+                <!--The offset Mediator-->
+                <!--<local:ScrollViewerOffsetMediator
+                    x:Name="Mediator" 
+                    Loaded="Mediator_Loaded" 
+                    ScrollViewer="{Binding ElementName=GridScrollViewer}"
+                    ScrollableWidthMultiplier="0" 
+                    ScrollableHeightMultiplier="0"
+                    TimeDuration="00:00:00.20"/>-->
+                <!--The actual game dock grid-->
+                <Grid x:Name="mainGrid" 
+                      Grid.Column="1" 
+                      Grid.Row="1" 
+                      Background="#01000000" 
+                      Width="Auto" 
+                      Height="Auto" 
+                      HorizontalAlignment="Center" 
+                      VerticalAlignment="Top" 
+                      ScrollViewer.CanContentScroll="False">
+                </Grid>
+            </Grid>
+            
+            <ScrollViewer.OpacityMask>
+                <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5" >
+                    <GradientStop/>
+                    <GradientStop Color="White" Offset="0.1"/>
+                    <GradientStop Color="White" Offset="0.9"/>
+                    <GradientStop Offset="1"/>
+                </LinearGradientBrush>
+            </ScrollViewer.OpacityMask>
+        </ScrollViewer>
+        <Grid x:Name="AuxGrid">
+            <Grid.RowDefinitions>
+                <RowDefinition/>
+                <RowDefinition/>
+                <RowDefinition/>
+            </Grid.RowDefinitions>
+            <Rectangle Grid.Row="0" x:Name="LoadingRectangle" Visibility="Hidden" Fill="#FF30C54B" RadiusY="5" RadiusX="5" Width="10" Height="10" RenderTransformOrigin="0.5,0.5" Stroke="Transparent">
+                <Rectangle.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </Rectangle.RenderTransform>
+            </Rectangle>
+            <Grid x:Name="ChatGrid" Width="128" Height="Auto" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                </Grid.ColumnDefinitions>
+                <Image x:Name="discordLaunchButton"
+                       Opacity="0.75"
+                       Visibility="Hidden"
+                       MouseLeftButtonDown="DiscordChat_MouseDown"
+                       Style="{StaticResource GameButtonStyleStatic}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Source="Assets/64x/discord64xCircle.png"
+                       Grid.Column="0" 
+                       Width="25"
+                       Height="25"
+                       RenderOptions.BitmapScalingMode="HighQuality"></Image>
+                <Image x:Name="steamFriendsLaunchButton"
+                       Opacity="0.75"
+                       Visibility="Hidden"
+                       MouseLeftButtonDown="SteamFriendsChat_MouseDown" 
+                       Style="{DynamicResource GameButtonStyleStatic}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Source="Assets/64x/steam64x.png"
+                       Grid.Column="1"
+                       Width="25" 
+                       Height="25"
+                       RenderOptions.BitmapScalingMode="HighQuality"></Image>
+                <!--<Grid Name="GameLabelsGrid">
+                    <Border Width="128"
+                        Grid.Row="1"
+                        Height="20"
+                        CornerRadius="10"
+                        Background="#33FFFFFF">
+                        <Label Content="Minecraft"
+                           Foreground="White"
+                           HorizontalContentAlignment="Center"
+                           VerticalContentAlignment="Center"
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Stretch"
+                           FontFamily="Lato Light"
+                           FontSize="10"/>
+                    </Border>
+                </Grid>-->
+            </Grid>
+
+            <Grid x:Name="SearchBarParent" Grid.Row="1" Width="Auto" Height="Auto" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border Width="0" Height="0" x:Name="FocusPixel" Focusable="True" FocusVisualStyle="{x:Null}"/>
+
+                <!--width and height is 0 because unused-->
+                <Grid Visibility="Hidden" x:Name="DealGrid" Width="0" Height="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                  
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="0.5*" />
+                        <ColumnDefinition Width="3.4*" />
+                        <ColumnDefinition Width="1.6*"/>
+                        <ColumnDefinition Width="0.8*"/>
+                        <!--<ColumnDefinition Width="0"/>
+                        <ColumnDefinition Width="0"/>-->
+                        <ColumnDefinition Width="1*"/>
+                        <ColumnDefinition Width="0.3*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Border x:Name="DealBackgroundBorder" Grid.ColumnSpan="6" Background="White" CornerRadius="10"/>
+
+                    <Image RenderTransformOrigin="0.5,0.5" RenderOptions.BitmapScalingMode="HighQuality" Width="20" Opacity="0.6" Name="ShuffleDealsButton" Source="Assets/64x/shuffleBlack.png" MouseEnter="HideDealButton_MouseEnter" MouseLeave="HideDealButton_MouseLeave" MouseLeftButtonDown="ShuffleDealsButton_MouseLeftButtonDown">
+                        <Image.RenderTransform>
+                            <RotateTransform Angle="0"/>
+                        </Image.RenderTransform>
+                    </Image>
+
+                    <Label x:Name="DealName" Grid.Column="1" Content="Awesome Game Deal" HorizontalAlignment="Left" FontFamily="Roboto Light"/>
+                    <Label Visibility="Visible" x:Name="DealSource" Grid.Column="2" Content="Steam" HorizontalAlignment="Left" FontFamily="Roboto Light"/>
+                    <Label Visibility="Visible" x:Name="DealDiscountPercent" Grid.Column="3" Content="80%" HorizontalAlignment="Center" FontFamily="Roboto Light"/>
+                    <Label x:Name="DealPrice" Grid.Column="4" Content="129.99$" HorizontalAlignment="Center" FontFamily="Roboto Light"/>
+                    <Label x:Name="DealLink" Content="" HorizontalAlignment="Center" Width="0" Height="0"/>
+
+                    <Image Name="HideDealButton" MouseLeftButtonDown="HideDealButton_MouseLeftButtonDown" Grid.Column="5" HorizontalAlignment="Center" Source="Assets/64x/closeButtonDark.png" Width="10" MouseEnter="HideDealButton_MouseEnter" MouseLeave="HideDealButton_MouseLeave" Opacity="0.6" ToolTip="Hide" RenderOptions.BitmapScalingMode="HighQuality"/>
+                    
+                    <Border Name="DealHitTestBorder" ToolTip="{Binding ElementName=DealName, Path=Content}" Grid.Column="1" Grid.ColumnSpan="4" Background="#02FFFFFF" CornerRadius="10" MouseEnter="DealBorder_MouseEnter" MouseLeave="DealBorder_MouseLeave" MouseLeftButtonDown="DealHitTestBorder_MouseLeftButtonDown"/>
+                </Grid>
+                <!--Margin="190,0,190,0"-->
+                <TextBox 
+                    Visibility="Hidden" 
+                    TextChanged="SearchTextBox_TextChanged" 
+                    GotKeyboardFocus="SearchTextBox_GotKeyboardFocus" 
+                    LostKeyboardFocus="SearchTextBox_LostKeyboardFocus" 
+                    GotFocus="SearchTextBox_GotFocus" 
+                    LostFocus="SearchTextBox_LostFocus"
+                    Grid.Row="1" 
+                    BorderThickness="0" 
+                    Background="#66FFFFFF" 
+                    x:Name="SearchTextBox" 
+                    VerticalAlignment="Center" 
+                    Height="20" 
+                    HorizontalContentAlignment="Center" 
+                    VerticalContentAlignment="Center" 
+                    Style="{DynamicResource AnimatedSearchTextBox}" 
+                    FontFamily="Roboto" 
+                    Foreground="#FF646464"
+                    PreviewKeyDown="SearchTextBox_PreviewKeyDown"/>
+                <Image Visibility="Hidden" x:Name="SearchIconImage" VerticalAlignment="Center" Source="Assets/64x/searchicon.png" Width="16" RenderOptions.BitmapScalingMode="HighQuality"/>
+            </Grid>
+
+            <Grid Grid.Row="2" x:Name="SearchResultsGrid" Width="Auto" Height="Auto"/>
+        </Grid>
+        <!-- Drag Border -->
+        <Border Name="DragBorder"
+                Visibility="Collapsed"
+                        Grid.Column="1"
+                        Grid.Row="1"
+                Background="#19FFFFFF"
+                Width="{Binding ElementName=GridScrollViewer, Path=Width}"
+                Height="{Binding ElementName=GridScrollViewer, Path=Height}"
+                AllowDrop="True"
+                DragOver="DragBorder_DragOver"
+                Drop="DragBorder_Drop"
+                DragLeave="DragBorder_DragLeave"
+                PreviewGiveFeedback="DragBorder_PreviewGiveFeedback"
+                />
+
+    </Grid>
+
+</Window>

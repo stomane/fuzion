@@ -1,0 +1,17 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/MSIXApplicationProject/MSIXApplicationProject.wapproj
+/FuzionDock/dbPassword.txt
+/FuzionDock/Fuzion_1_TemporaryKey.pfx
+/FuzionDock/Fuzion_2_TemporaryKey.pfx
+/FuzionDock/Fuzion_TemporaryKey.pfx
+/FuzionDock/GoogleSearchAPIKey.txt
+/FuzionDock/IGDBProxyURL.txt
+/MSIXApplicationProject
+/Releases
+/.vs
+/FuzionDock/bin/
+/FuzionDock/obj/
+/FuzionDock/Fuzion/

@@ -1,0 +1,63 @@
+﻿<Window x:Class="Fuzion.Update.UpdateMessageWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Fuzion.Update"
+        mc:Ignorable="d"
+        Title="UpdateMessageWindow" Height="180" Width="380" ResizeMode="NoResize" WindowStyle="None" Background="Transparent" WindowStartupLocation="CenterScreen" Mouse.MouseDown="Window_MouseDown"  AllowsTransparency="True">
+    <Window.Triggers>
+        <!--Too GPU intensive on multiple windows, add as an option-->
+        <!--<EventTrigger RoutedEvent="FrameworkElement.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource BorderGradientAnimation}"/>
+        </EventTrigger>-->
+    </Window.Triggers>
+    <Grid>
+        <Border x:Name="animatedBorder" BorderBrush="White" BorderThickness="0" HorizontalAlignment="Center" Height="170" VerticalAlignment="Center" Width="370" CornerRadius="10" Opacity="0.95">
+            <Border.Background>
+                <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <LinearGradientBrush.RelativeTransform>
+                        <TransformGroup>
+                            <ScaleTransform CenterY="0.5" CenterX="0.5"/>
+                            <SkewTransform CenterY="0.5" CenterX="0.5"/>
+                            <RotateTransform CenterY="0.5" CenterX="0.5" Angle="65"/>
+                            <TranslateTransform/>
+                        </TransformGroup>
+                    </LinearGradientBrush.RelativeTransform>
+                    <GradientStop Color="#FF18BF5C" Offset="0"/>
+                    <GradientStop Color="#FF58A7D4" Offset="1"/>
+                    <GradientStop Color="#FF1FDEDE" Offset="0.5"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect Opacity="0.5" RenderingBias="Performance"/>
+            </Border.Effect>
+            <Border x:Name="gameHighligth" BorderBrush="White" BorderThickness="0" Height="25" VerticalAlignment="Top" Width="{Binding ActualWidth, ElementName=displayName}" Background="#7FFFFFFF" CornerRadius="0,0,10,10" Margin="0" HorizontalAlignment="Center" Padding="0">
+            </Border>
+            <!--<Border.Triggers>
+                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                    <BeginStoryboard Storyboard="{StaticResource BorderGradientAnimation}"/>
+                </EventTrigger>
+            </Border.Triggers>-->
+        </Border>
+        <Border Name="OverlayBorder" BorderBrush="White" BorderThickness="0" HorizontalAlignment="Center" Height="{Binding ActualHeight, ElementName=animatedBorder}" VerticalAlignment="Center" Width="{Binding ActualWidth, ElementName=animatedBorder}" CornerRadius="10" Background="#66000000"/>
+        <Border Name="LabelBackgroundBorder" Background="#33FFFFFF" Width="70" Height="20" VerticalAlignment="Top" CornerRadius="0,0,10,10" Margin="0,5,0,0"/>
+        <Label Content="Changes" Foreground="White" FontFamily="Roboto" FontSize="14" HorizontalAlignment="Center"/>
+        <!--<ScrollViewer Background="Transparent" VerticalScrollBarVisibility="Hidden" Height="170" Width="370">-->
+            <TextBlock Foreground="White" FontFamily="Roboto Light" FontSize="12" Margin="15,25,15,15">
+            • You can now search! Just focus on Fuzion and start typing. <LineBreak/>
+            • Added an optional Steam search setting enabled by default <LineBreak/>
+            • Added Keyboard controls and selection visuals <LineBreak/>
+            • Layout optimized for both Top and Bottom location <LineBreak/>
+            • Settings should now properly transfer on update <LineBreak/>
+            • Added ".exe" and ".ico" to manual icon selection <LineBreak/>
+            • Game scanning database improvements <LineBreak/>
+            • Fixed a bug in revert icon for manually added games <LineBreak/>
+            • Stick to Desktop is improved and will now detect "Start+D" <LineBreak/>
+            </TextBlock>
+        <!--</ScrollViewer>-->
+        <Border CornerRadius="0,10,0,0" x:Name="CloseWindow"  MouseLeftButtonDown="CloseWindow_MouseLeftButtonDown" BorderThickness="0" Style="{StaticResource FuzionBorderCloseButton}" Margin="333,5,5,145">
+            <Image Margin="8"  Opacity="1" Source="/Fuzion;component/Assets/32x/slimCloseIcon.png"/>
+        </Border>
+    </Grid>
+</Window>
