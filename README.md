@@ -1,6 +1,6 @@
 # Fuzion Dock
 
-Fuzion is a seamless game dock with automatic icon fetching and styling and quite a few extra features, but I no longer have the time to upkeep it.
+Fuzion is a seamless game dock with automatic icon fetching and styling. It includes quite a few extra features such as deal fetching from reddit, omni search which searches in both steam and the dock, delayed and silent when available game launcher launching, and gamepad support. I no longer have the time to upkeep it.
 
 ## Features
 
