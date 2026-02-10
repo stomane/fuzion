@@ -492,17 +492,15 @@ namespace Fuzion
 
             dockLocation.SelectedIndex = Settings.Default.DockLocation;
 
-            // Launch on startup enable/disable for UWP
-            if (UniversalPlatform.Startup.IsUniversalPlatform)
-            {
-                StartupCheckBox.IsEnabled = true;
-                UniversalPlatform.Startup.UpdateStartupState(Settings.Default.LaunchOnStartup);
+            // Launch on startup checks
+            StartupCheckBox.IsEnabled = true;
+            // Async check for startup state would be better, but for now relying on settings or just enabling manual toggle.
+            // Ideally: StartupCheckBox.IsChecked = await UniversalPlatform.Startup.GetCurrentStartupState(); 
+            // But LoadSettings is synchronous. 
+            // We can fire and forget or just let user toggle. 
+            // Existing code synced Settings.Default.LaunchOnStartup.
 
-                if (UniversalPlatform.Startup.CurrentStartupState == Windows.ApplicationModel.StartupTaskState.DisabledByPolicy)
-                {
-                    StartupCheckBox.IsEnabled = false;
-                }
-            }
+            // if (UniversalPlatform.Startup.IsUniversalPlatform) block removed.
 
             // Launch click count
             if (Settings.Default.LaunchClickCount == 1)
@@ -519,6 +517,18 @@ namespace Fuzion
 
             // Toggle Blacklist visibility
             ToggleBlacklistRemoveButtonVisibility();
+
+            // Initialize Background Settings Visibility
+            if (Settings.Default.BackgroundAutoSize)
+            {
+                BackgroundWidthGrid.Visibility = Visibility.Collapsed;
+                BackgroundHeightGrid.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                BackgroundWidthGrid.Visibility = Visibility.Visible;
+                BackgroundHeightGrid.Visibility = Visibility.Visible;
+            }
         }
 
         private static void InstallUpdateSyncWithInfo()
@@ -757,7 +767,10 @@ namespace Fuzion
             {
                 Settings.Default.StartupIconSize = e.NewValue;
                 // Update original icon size
-                Settings.Default.OriginalIconSize = e.NewValue;
+                if (!MainWindow.IsZoomActive)
+                {
+                    Settings.Default.OriginalIconSize = e.NewValue;
+                }
                 ChangeIconsSizeEvent(this, new IconSizeChangedEventArgs(e.NewValue));
             }
         }
@@ -942,7 +955,8 @@ namespace Fuzion
 
         private void EnableGamepadCheckbox_Changed(object sender, RoutedEventArgs e)
         {
-            Task.Run(() => Gamepad.Bindings.InitializeXInput());
+            if (loaded)
+                Task.Run(() => Gamepad.Bindings.InitializeXInput());
         }
 
         private void CheckForUpdatesButton_Click(object sender, RoutedEventArgs e)
@@ -987,6 +1001,18 @@ namespace Fuzion
         private void EdgeFade_Toggled(object sender, RoutedEventArgs e)
         {
             MainWindow.ToggleScrollViewerEdgeFade();
+        }
+
+        private void BackgroundVisuals_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (loaded)
+                MainWindow.UpdateBackgroundVisuals();
+        }
+
+        private void IconSpacing_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (loaded)
+                MainWindow.UpdateIconMargins();
         }
 
         private void ShowGameLabels_Unchecked(object sender, RoutedEventArgs e)
@@ -1148,6 +1174,40 @@ namespace Fuzion
         {
             dockTabSVTarget = DockTabScrollViewer.VerticalOffset;
             dockTabSVCanLerp = true;
+        }
+
+        private void BackgroundAutoSize_Click(object sender, RoutedEventArgs e)
+        {
+            if (BackgroundAutoSizeCheckbox.IsChecked == true)
+            {
+                BackgroundWidthGrid.Visibility = Visibility.Collapsed;
+                BackgroundHeightGrid.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                BackgroundWidthGrid.Visibility = Visibility.Visible;
+                BackgroundHeightGrid.Visibility = Visibility.Visible;
+            }
+
+            Settings.Default.Save();
+            UniversalPlatform.OnUpdate.UpdateUWPSettings();
+            MainWindow.UpdateBackgroundSize();
+        }
+
+        private void BackgroundSizeExample_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (loaded)
+            {
+                Settings.Default.Save();
+                MainWindow.UpdateBackgroundSize();
+            }
+        }
+
+        private void BackgroundEdgeToEdge_Click(object sender, RoutedEventArgs e)
+        {
+            Settings.Default.Save();
+            UniversalPlatform.OnUpdate.UpdateUWPSettings();
+            MainWindow.UpdateBackgroundSize();
         }
     }
 }

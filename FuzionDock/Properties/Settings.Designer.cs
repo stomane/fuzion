@@ -550,5 +550,89 @@ namespace Fuzion.Properties {
                 this["BounceScroll"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool BackgroundAutoSize {
+            get {
+                return ((bool)(this["BackgroundAutoSize"]));
+            }
+            set {
+                this["BackgroundAutoSize"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("500")]
+        public double BackgroundWidth {
+            get {
+                return ((double)(this["BackgroundWidth"]));
+            }
+            set {
+                this["BackgroundWidth"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("100")]
+        public double BackgroundHeight {
+            get {
+                return ((double)(this["BackgroundHeight"]));
+            }
+            set {
+                this["BackgroundHeight"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool BackgroundEdgeToEdge {
+            get {
+                return ((bool)(this["BackgroundEdgeToEdge"]));
+            }
+            set {
+                this["BackgroundEdgeToEdge"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.1")]
+        public double BackgroundOpacity {
+            get {
+                return ((double)(this["BackgroundOpacity"]));
+            }
+            set {
+                this["BackgroundOpacity"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public double BackgroundCornerRadius {
+            get {
+                return ((double)(this["BackgroundCornerRadius"]));
+            }
+            set {
+                this["BackgroundCornerRadius"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1.5")]
+        public double IconSpacing {
+            get {
+                return ((double)(this["IconSpacing"]));
+            }
+            set {
+                this["IconSpacing"] = value;
+            }
+        }
     }
 }

@@ -309,8 +309,11 @@ namespace Fuzion.Scanner
             });
 
             Console.WriteLine("Linq Safe List count: "+linqSafeRegistryList.Count);
-            // Sort the linqSafeRegistryCollection
-            registryList = linqSafeRegistryList.GroupBy(p => p.DisplayName).Select(name => name.First()).ToList();
+            // Sort the linqSafeRegistryCollection and remove any null entries
+            registryList = linqSafeRegistryList.Where(p => p != null && !string.IsNullOrEmpty(p.DisplayName))
+                                               .GroupBy(p => p.DisplayName)
+                                               .Select(name => name.First())
+                                               .ToList();
             Console.WriteLine("Registry List count (after removing duplicates): " + registryList.Count);
 
             Console.WriteLine("Registry Scan Completed");

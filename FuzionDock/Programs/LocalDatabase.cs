@@ -101,7 +101,7 @@ namespace Fuzion.Programs
                             // Web database
                             SQL.DbConnection.PushList(RecentlyAddedGames);
                             // Vanx database
-                            SQL.FuzionDB.PushList(RecentlyAddedGames);
+                            //SQL.FuzionDB.PushList(RecentlyAddedGames);
                         }
                     }
 
