@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Linq;
+using System.Text;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -42,6 +43,7 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Controls.Primitives;
 using Fuzion.Dock;
+using System.Windows.Interop;
 
 namespace Fuzion
 {
@@ -237,6 +239,8 @@ namespace Fuzion
 
 
         public static bool MainWindowActive { get; private set; }
+        public static IntPtr Handle { get; private set; }
+        public static bool IsZoomActive { get; private set; }
 
         private static string GetDefaultAssetPath()
         {
@@ -299,6 +303,9 @@ namespace Fuzion
             AddSearchKeyPressEvents();
             _ = Task.Run(() => SquirrelUpdate.Update());
             _ = Task.Run(() => SettingsWindow.GetDynamicImages());
+            
+            // Fix icon margins to remove gaps in auto-sized background
+            UpdateIconMargins();
             //StartTestDispatcher();
         }
         private void Startup()
@@ -306,6 +313,7 @@ namespace Fuzion
             SetMainScreenRelativeWidthHeight();
             CreateDirectories();
             HideFromTaskSwitcher();
+            SetupMinimizePreventionHook();
             //Dock.Scrolling.EnableSmoothScrolling();
             ScrollTimer.Start();
             CreateTaskbarIcon();
@@ -317,6 +325,99 @@ namespace Fuzion
             //TrayIcon.FocusFuzionOnClick();
         }
 
+
+        private IntPtr foregroundHook;
+        private static Fuzion.Native.NativeMethods.WinEventDelegate foregroundDelegate; // Keep reference to prevent GC
+
+        /// <summary>
+        /// Sets up a window event hook to prevent the dock from being hidden when Windows+D is pressed
+        /// </summary>
+        private void SetupMinimizePreventionHook()
+        {
+            // Use EVENT_SYSTEM_FOREGROUND hook to detect when WorkerW becomes foreground (Show Desktop)
+            foregroundDelegate = new Fuzion.Native.NativeMethods.WinEventDelegate(OnForegroundWindowChanged);
+            foregroundHook = Fuzion.Native.NativeMethods.SetWinEventHook(
+                3, 3, // EVENT_SYSTEM_FOREGROUND
+                IntPtr.Zero, foregroundDelegate,
+                0, 0, 0); // WINEVENT_OUTOFCONTEXT
+        }
+
+        /// <summary>
+        /// Called when foreground window changes - detects Show Desktop and keeps window visible
+        /// </summary>
+        private void OnForegroundWindowChanged(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+        {
+            var className = new StringBuilder(256);
+            Fuzion.Native.NativeMethods.GetClassName(hwnd, className, className.Capacity);
+            
+            System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Foreground changed to: " + className.ToString() + " (hwnd: " + hwnd + ")`r`n");
+            
+            if (className.ToString() == "Progman" || className.ToString() == "WorkerW")
+            {
+                System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " ***DETECTED WorkerW - Setting Topmost***`r`n");
+                // Show Desktop was triggered, keep our window visible by setting Topmost
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    Topmost = true;
+                    System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Topmost set to true`r`n");
+                }));
+            }
+            else if (Topmost)
+            {
+                System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Non-WorkerW detected while Topmost, resetting`r`n");
+                // Another window is foreground, allow normal layering
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    Topmost = false;
+                }));
+            }
+        }
+
+        /// <summary>
+        /// Window procedure hook to intercept minimize messages
+        /// </summary>
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            const int WM_SYSCOMMAND = 0x0112;
+            const int SC_MINIMIZE = 0xF020;
+
+            // Intercept and block minimize command
+            if (msg == WM_SYSCOMMAND && ((int)wParam & 0xFFF0) == SC_MINIMIZE)
+            {
+                // Prevent minimize by marking the message as handled
+                handled = true;
+                return IntPtr.Zero;
+            }
+
+            return IntPtr.Zero;
+        }
+
+        /// <summary>
+        /// Prevents the window from being minimized (Windows 11 compatible)
+        /// </summary>
+        protected override void OnStateChanged(EventArgs e)
+        {
+            // Prevent minimize completely - don't call base if minimizing
+            if (WindowState == WindowState.Minimized)
+            {
+                // Force back to normal without processing the minimize
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    WindowState = WindowState.Normal;
+                    Show();
+                    Topmost = true;
+                    Topmost = false; // Flash to ensure visibility
+                }), DispatcherPriority.Send);
+                return; // Don't call base.OnStateChanged for minimize
+            }
+            base.OnStateChanged(e);
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            Handle = new WindowInteropHelper(this).Handle;
+        }
 
         //private static void ScrollTimerTick(object state)
         //{
@@ -426,7 +527,7 @@ namespace Fuzion
         {
             if (Settings.Default.DockLocation <= 1) // top, bottom
             {
-                DefaultGameMargins = new Thickness(1.5, 5, 1.5, 5);
+                DefaultGameMargins = new Thickness(Settings.Default.IconSpacing, 5, Settings.Default.IconSpacing, 5);
 
                 if (Settings.Default.DockLocation == 0)
                     DefaultChatBarThickness = new Thickness(0, 0, 0, 8);
@@ -436,7 +537,7 @@ namespace Fuzion
             }
             else // left,right
             {
-                DefaultGameMargins = new Thickness(5, 1.5, 5, 1.5);
+                DefaultGameMargins = new Thickness(5, Settings.Default.IconSpacing, 5, Settings.Default.IconSpacing);
 
                 if (Settings.Default.DockLocation == 2)
                     DefaultChatBarThickness = new Thickness(0, 0, 8, 0);
@@ -444,7 +545,6 @@ namespace Fuzion
                 if (Settings.Default.DockLocation == 3)
                     DefaultChatBarThickness = new Thickness(8, 0, 0, 0);
             }
-
         }
 
         private static void ClearLocalDatabaseOnce()
@@ -593,19 +693,19 @@ namespace Fuzion
 
         private static void StartDealCheckTimer(Grid dealGrid)
         {
-            if (dealCheckerTimer.IsEnabled == false)
-            {
-                dealGrid.Visibility = Visibility.Visible;
-                GameDeals.DealChecker.LoadDeals();
-                dealCheckerTimer.Interval = TimeSpan.FromMinutes(5d);
-                dealCheckerTimer.Tick += DealCheckerTimer_Tick;
-                dealCheckerTimer.Start();
-            }
+            //if (dealCheckerTimer.IsEnabled == false)
+            //{
+            //    dealGrid.Visibility = Visibility.Visible;
+            //    //GameDeals.DealChecker.LoadDeals();
+            //    dealCheckerTimer.Interval = TimeSpan.FromMinutes(5d);
+            //    dealCheckerTimer.Tick += DealCheckerTimer_Tick;
+            //    dealCheckerTimer.Start();
+            //}
         }
 
         private static void DealCheckerTimer_Tick(object sender, EventArgs e)
         {
-            GameDeals.DealChecker.LoadDeals();
+            //GameDeals.DealChecker.LoadDeals();
         }
 
         private static void Load()
@@ -664,7 +764,7 @@ namespace Fuzion
             #endregion
 
             // Stick to desktop - now always on
-            Settings.Default.StickToDesktop = true;
+            // Settings.Default.StickToDesktop = true;
 
             // Icon relevance now always 5 until icon database is built
             Settings.Default.IconsPerGame = 5;
@@ -1079,6 +1179,14 @@ namespace Fuzion
                 SetChatBarVisibility(true);
             }
 
+            UpdateBackgroundSize();
+            UpdateBackgroundVisuals();
+
+            if (Settings.Default.LaunchOnStartup)
+            {
+                UniversalPlatform.Startup.UpdateStartupState(true);
+            }
+
             UpdateBigAddButtonState();
             CenterWindowOnScreen(System.Reflection.MethodBase.GetCurrentMethod().Name);
 
@@ -1464,6 +1572,7 @@ namespace Fuzion
                     RefreshGrid();
                     CenterWindowOnScreen(System.Reflection.MethodBase.GetCurrentMethod().Name);
                     UpdateSettings();
+                    UpdateIconMargins(); // Fix first/last icon margins to remove gaps
                     UpdateBigAddButtonState();
                 }
             }
@@ -1739,11 +1848,13 @@ namespace Fuzion
 
             if (gStatus == GamepadStatus.Connected)
             {
+                IsZoomActive = true;
                 Settings.Default.StartupIconSize = Settings.Default.ZoomIconSize;
             }
 
             if (gStatus == GamepadStatus.Disconnected)
             {
+                IsZoomActive = false;
                 Settings.Default.StartupIconSize = Settings.Default.OriginalIconSize;
             }
 
@@ -2824,7 +2935,7 @@ namespace Fuzion
             RightClickedGame = (Game)sender;
             // Context menu item Edit
             var editMenuItem = (MenuItem)RightClickedGame.ContextMenu.Items[2];
-            //editMenuItem.Header = "_Edit ʃ " + RightClickedGame.DockName + " ʅ";
+            //editMenuItem.Header = "_Edit ? " + RightClickedGame.DockName + " ?";
             editMenuItem.Tag = RightClickedGame.DockName;
 
             Console.WriteLine("IconURI: "+RightClickedGame.IconURI);
@@ -3269,6 +3380,10 @@ namespace Fuzion
                 // Set maingrid horizontal alignment
                 AppWindow.mainGrid.HorizontalAlignment = HorizontalAlignment.Center;
 
+                // Border stays at top for horizontal dock
+                AppWindow.DockBackgroundBorder.VerticalAlignment = VerticalAlignment.Top;
+                AppWindow.DockBackgroundBorder.HorizontalAlignment = HorizontalAlignment.Center;
+
                 // Auxilary grid - holds everything but the game dock icons
                 AppWindow.AuxGrid.RowDefinitions.Clear();
                 AppWindow.AuxGrid.ColumnDefinitions.Clear();
@@ -3462,6 +3577,10 @@ namespace Fuzion
 
                 // Set maingrid to center vertically
                 AppWindow.mainGrid.VerticalAlignment = VerticalAlignment.Center;
+
+                // Border centers vertically for left/right dock
+                AppWindow.DockBackgroundBorder.VerticalAlignment = VerticalAlignment.Center;
+                AppWindow.DockBackgroundBorder.HorizontalAlignment = HorizontalAlignment.Left;
 
                 // Auxilary grid - holds everything but the game dock icons
                 AppWindow.AuxGrid.RowDefinitions.Clear();
@@ -3707,21 +3826,52 @@ namespace Fuzion
 
         private static void BindScrollViewerOffsets()
         {
+            double autoSizePadding = 25;
+
+            // When auto-sizing, use fixed small padding instead of game-width binding
+            if (Settings.Default.BackgroundAutoSize)
+            {
+                if (IsDockHorizontal)
+                {
+                    // Horizontal dock: add padding on left/right sides only
+                    if (LeftGridOffsetColumn != null)
+                    {
+                        BindingOperations.ClearBinding(LeftGridOffsetColumn, ColumnDefinition.WidthProperty);
+                        LeftGridOffsetColumn.Width = new GridLength(autoSizePadding, GridUnitType.Pixel);
+                        LeftGridOffsetColumn.MinWidth = autoSizePadding;
+                        LeftGridOffsetColumn.MaxWidth = autoSizePadding;
+                    }
+                    if (RightGridOffsetColumn != null)
+                    {
+                        BindingOperations.ClearBinding(RightGridOffsetColumn, ColumnDefinition.WidthProperty);
+                        RightGridOffsetColumn.Width = new GridLength(autoSizePadding, GridUnitType.Pixel);
+                        RightGridOffsetColumn.MinWidth = autoSizePadding;
+                        RightGridOffsetColumn.MaxWidth = autoSizePadding;
+                    }
+                }
+                else
+                {
+                    // Vertical dock: add padding on top/bottom sides only
+                    if (TopGridOffsetRow != null)
+                    {
+                        BindingOperations.ClearBinding(TopGridOffsetRow, RowDefinition.HeightProperty);
+                        TopGridOffsetRow.Height = new GridLength(autoSizePadding, GridUnitType.Pixel);
+                        TopGridOffsetRow.MinHeight = autoSizePadding;
+                        TopGridOffsetRow.MaxHeight = autoSizePadding;
+                    }
+                    if (BottomGridOffsetRow != null)
+                    {
+                        BindingOperations.ClearBinding(BottomGridOffsetRow, RowDefinition.HeightProperty);
+                        BottomGridOffsetRow.Height = new GridLength(autoSizePadding, GridUnitType.Pixel);
+                        BottomGridOffsetRow.MinHeight = autoSizePadding;
+                        BottomGridOffsetRow.MaxHeight = autoSizePadding;
+                    }
+                }
+                return;
+            }
+
             if (IsDockHorizontal)
             {
-                #region Old Percentage Based Binding
-                // Bind offsets to 10% of scrollable width - will try using game width
-                //Binding gridScrollOffsetBinding = new Binding("ScrollableWidth")
-                //{
-                //    Source = AppWindow.GridScrollViewer,
-                //    Converter = ScrollViewerOffsetsConverter,
-                //    ConverterParameter = 0.1d
-                //};
-
-                //LeftGridOffsetColumn.SetBinding(ColumnDefinition.WidthProperty, gridScrollOffsetBinding);
-                //RightGridOffsetColumn.SetBinding(ColumnDefinition.WidthProperty, gridScrollOffsetBinding);
-                #endregion
-
                 //Bind offsets to 1 game width
                 Binding gridScrollOffsetBinding = new Binding("ActualGameSize")
                 {
@@ -3911,6 +4061,145 @@ namespace Fuzion
             //    RescanAsync();
         }
 
+
+        public static void ForceDeactivate()
+        {
+            if (AppWindow == null) return;
+
+            AppWindow.Dispatcher.Invoke(() =>
+            {
+                // Replicate logic from MainWindow_Deactivated
+
+                // Hide GameHighlight
+                AppWindow.AnimateHighlight(false);
+
+                // Hide search
+                AppWindow.ShrinkSearchBox();
+
+                // Hide tooltip
+                GameTooltip.IsOpen = false;
+
+                // Reset HighlightedGame
+                HighlightedGame = null;
+
+                // Clear Search
+                AppWindow.SearchTextBox.Text = string.Empty;
+            });
+        }
+
+        public static void UpdateBackgroundSize()
+        {
+            if (AppWindow == null) return;
+
+            AppWindow.Dispatcher.Invoke(() =>
+            {
+                if (Settings.Default.BackgroundAutoSize)
+                {
+                    AppWindow.DockBackgroundBorder.Width = double.NaN;
+                    AppWindow.DockBackgroundBorder.Height = double.NaN;
+
+                    // Use small fixed offset so auto-sized background has nice padding around icons
+                    double autoSizePadding = 25;
+                    if (LeftGridOffsetColumn != null)
+                    {
+                        BindingOperations.ClearBinding(LeftGridOffsetColumn, ColumnDefinition.WidthProperty);
+                        LeftGridOffsetColumn.Width = new GridLength(autoSizePadding, GridUnitType.Pixel);
+                        LeftGridOffsetColumn.MinWidth = autoSizePadding;
+                        LeftGridOffsetColumn.MaxWidth = autoSizePadding;
+                    }
+                    if (RightGridOffsetColumn != null)
+                    {
+                        BindingOperations.ClearBinding(RightGridOffsetColumn, ColumnDefinition.WidthProperty);
+                        RightGridOffsetColumn.Width = new GridLength(autoSizePadding, GridUnitType.Pixel);
+                        RightGridOffsetColumn.MinWidth = autoSizePadding;
+                        RightGridOffsetColumn.MaxWidth = autoSizePadding;
+                    }
+                    if (TopGridOffsetRow != null)
+                    {
+                        BindingOperations.ClearBinding(TopGridOffsetRow, RowDefinition.HeightProperty);
+                        TopGridOffsetRow.Height = new GridLength(autoSizePadding, GridUnitType.Pixel);
+                        TopGridOffsetRow.MinHeight = autoSizePadding;
+                        TopGridOffsetRow.MaxHeight = autoSizePadding;
+                    }
+                    if (BottomGridOffsetRow != null)
+                    {
+                        BindingOperations.ClearBinding(BottomGridOffsetRow, RowDefinition.HeightProperty);
+                        BottomGridOffsetRow.Height = new GridLength(autoSizePadding, GridUnitType.Pixel);
+                        BottomGridOffsetRow.MinHeight = autoSizePadding;
+                        BottomGridOffsetRow.MaxHeight = autoSizePadding;
+                    }
+                }
+                else
+                {
+                    if (Settings.Default.BackgroundEdgeToEdge)
+                    {
+                        AppWindow.DockBackgroundBorder.Width = SystemParameters.PrimaryScreenWidth;
+                    }
+                    else
+                    {
+                        AppWindow.DockBackgroundBorder.Width = Settings.Default.BackgroundWidth;
+                    }
+
+                    AppWindow.DockBackgroundBorder.Height = Settings.Default.BackgroundHeight;
+
+                    // Restore offset column bindings
+                    BindScrollViewerOffsets();
+                }
+            });
+        }
+
+        public static void UpdateBackgroundVisuals()
+        {
+            if (AppWindow == null) return;
+
+            AppWindow.Dispatcher.Invoke(() =>
+            {
+                // Color - using logic from ScrollViewerBackgroundColorConverter
+                Color baseColor = Settings.Default.DarkGameOutline
+                    ? Color.FromArgb((byte)(Settings.Default.BackgroundOpacity * 255), 0, 0, 0)
+                    : Color.FromArgb((byte)(Settings.Default.BackgroundOpacity * 255), 255, 255, 255);
+
+                AppWindow.DockBackgroundBorder.Background = new SolidColorBrush(baseColor);
+
+                // Corner Radius
+                AppWindow.DockBackgroundBorder.CornerRadius = new CornerRadius(Settings.Default.BackgroundCornerRadius);
+            });
+        }
+
+        public static void UpdateIconMargins()
+        {
+            if (AppWindow == null) return;
+
+            AppWindow.Dispatcher.Invoke(() =>
+            {
+                SetDockLocationDefaultValues();
+
+                for (int i = 0; i < GameObjects.Count; i++)
+                {
+                    Game game = GameObjects[i];
+                    
+                    if (Settings.Default.DockLocation <= 1) // top, bottom (horizontal)
+                    {
+                        // First icon: no left margin
+                        // Last icon: no right margin
+                        // Middle icons: full margins
+                        double leftMargin = (i == 0) ? 0 : Settings.Default.IconSpacing;
+                        double rightMargin = (i == GameObjects.Count - 1) ? 0 : Settings.Default.IconSpacing;
+                        game.Margin = new Thickness(leftMargin, 5, rightMargin, 5);
+                    }
+                    else // left, right (vertical)
+                    {
+                        // First icon: no top margin
+                        // Last icon: no bottom margin
+                        // Middle icons: full margins
+                        double topMargin = (i == 0) ? 0 : Settings.Default.IconSpacing;
+                        double bottomMargin = (i == GameObjects.Count - 1) ? 0 : Settings.Default.IconSpacing;
+                        game.Margin = new Thickness(5, topMargin, 5, bottomMargin);
+                    }
+                }
+            });
+        }
+
         private void MainWindow_Deactivated(object sender, EventArgs e)
         {
             Console.WriteLine("MainWindow was deactivated");
@@ -3932,6 +4221,12 @@ namespace Fuzion
         private void MainWindow_StateChanged(object sender, EventArgs e)
         {
             Console.WriteLine("WINDOW STATE" + WindowState.ToString());
+            
+            // Prevent minimize-all from hiding the dock
+            if (WindowState == WindowState.Minimized)
+            {
+                WindowState = WindowState.Normal;
+            }
         }
         #endregion
 
@@ -3949,45 +4244,11 @@ namespace Fuzion
 
         public static bool GetIsDockPerfectlyFittingScreen()
         {
-            double minScrollableIconSize;
-            int childrenCount;
+            if (AppWindow == null) return true;
 
-            if (AppWindow != null && AppWindow.mainGrid.Children.Count - 1 > 1)
-            {
-                childrenCount = AppWindow.mainGrid.Children.Count - 1;
-            }
-            else if (GameObjects.Count > 0)
-            {
-                childrenCount = GameObjects.Count;
-            }
-            else
-            {
-                childrenCount = 1;
-            }
-
-            if (IsDockHorizontal)
-            {
-                minScrollableIconSize = Position.Monitors.ActiveScreen.WorkingArea.Width / childrenCount;
-
-                if (ActualGameSize <= minScrollableIconSize)
-                {
-                    DockScrollingDisallowed = true;
-                    return true;
-                }
-            }
-            else
-            {
-                minScrollableIconSize = Position.Monitors.ActiveScreen.WorkingArea.Height / childrenCount;
-
-                if (ActualGameSize <= minScrollableIconSize)
-                {
-                    DockScrollingDisallowed = true;
-                    return true;
-                }
-            }
-
-            DockScrollingDisallowed = false;
-            return false;
+            bool fits = AppWindow.GridScrollViewer.ScrollableWidth == 0 && AppWindow.GridScrollViewer.ScrollableHeight == 0;
+            DockScrollingDisallowed = fits;
+            return fits;
         }
 
         private void Mediator_Loaded(object sender, RoutedEventArgs e)
@@ -5155,13 +5416,13 @@ namespace Fuzion
 
             #endregion
 
-            GameDeals.Deal d = GameDeals.DealChecker.GetNextDeal();
+            //GameDeals.Deal d = GameDeals.DealChecker.GetNextDeal();
 
-            DealName.Content = d.Name;
-            DealPrice.Content = d.Price;
-            DealDiscountPercent.Content = d.DiscountPercent;
-            DealSource.Content = d.DealSource;
-            DealLink.Content = d.Link;
+            //DealName.Content = d.Name;
+            //DealPrice.Content = d.Price;
+            //DealDiscountPercent.Content = d.DiscountPercent;
+            //DealSource.Content = d.DealSource;
+            //DealLink.Content = d.Link;
         }
 
         #region Drag Tests
