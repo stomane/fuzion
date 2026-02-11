@@ -273,7 +273,8 @@ namespace Fuzion.SQL
         {
             try
             {
-                return FuzionDB.GameExistsInDatabase(gameName);
+                //return FuzionDB.GameExistsInDatabase(gameName);
+                return false; // Fallback when FuzionDB is unavailable
             }
             catch (Exception) // if it fails, try to reach the old web db
             {
@@ -320,7 +321,8 @@ namespace Fuzion.SQL
         {
             try
             {
-                return FuzionDB.ProgramExistsInDatabase(name);
+                //return FuzionDB.ProgramExistsInDatabase(name);
+                return false; // Fallback when FuzionDB is unavailable
             }
             catch (Exception) //try the old web db if it fails
             {
@@ -362,13 +364,14 @@ namespace Fuzion.SQL
             }
         }
 
-        public static Tuple<string,int> GetIconDataTuple(string name)
+        public static async Task<Tuple<string,int>> GetIconDataTupleAsync(string name)
         {
             var result = Tuple.Create(string.Empty, 0);
 
             try
             {
-                return FuzionDB.GetIconTuple(name);
+                //return FuzionDB.GetIconTuple(name);
+                return result; // Fallback to empty result
             }
             catch (Exception) // check web db if fuzion db fails
             {
@@ -382,7 +385,7 @@ namespace Fuzion.SQL
                 {
                     try
                     {
-                        connection.Open();
+                        await connection.OpenAsync().ConfigureAwait(false);
                         using (MySqlCommand command = new MySqlCommand())
                         {
                             command.Connection = connection;
@@ -390,12 +393,12 @@ namespace Fuzion.SQL
                             //command.Parameters.AddWithValue("f", 0); //unused
                             command.CommandText = "SELECT * FROM DB_TABLE.mainTable WHERE gameName = @p";
 
-                            var reader = command.ExecuteReader();
+                            var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
                             if (reader.HasRows)
                             {
                                 // entry exists, get icon link
-                                reader.Read();
-                                result = Tuple.Create(reader.GetString("iconLink"), reader.GetInt32("iconRelevance"));
+                                await reader.ReadAsync().ConfigureAwait(false);
+                                result = Tuple.Create(reader.GetString(reader.GetOrdinal("iconLink")), reader.GetInt32(reader.GetOrdinal("iconRelevance")));
                                 Console.WriteLine("MYSQL Icon Link: " + result.Item1 + " and Icon Relevance" + result.Item2);
                             }
                         }

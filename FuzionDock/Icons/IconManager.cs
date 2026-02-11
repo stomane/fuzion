@@ -161,7 +161,7 @@ namespace Fuzion.Icons
         }
 
         // Used in Program.FetchIcon()
-        public static async void DownloadIcon(Program program, bool disregardFuzionDB = false) // get best icon main function
+        public static async Task DownloadIcon(Program program, bool disregardFuzionDB = false) // get best icon main function
         {
             MainWindow.AnimateLoadingRectangle(true, "geticon" + program?.IconGUID);
 
@@ -202,11 +202,11 @@ namespace Fuzion.Icons
                 try
                 {
                     // Check if it has an icon in fuzion db first and if iconrelevance is good
-                    fuzionDBData = SQL.DbConnection.GetIconDataTuple(program.DisplayName);
+                    fuzionDBData = await SQL.DbConnection.GetIconDataTupleAsync(program.DisplayName).ConfigureAwait(false);
                 }
                 catch (Exception)
                 {
-                    DownloadIcon(program, true);
+                    _ = DownloadIcon(program, true);
                     return;
                 }
             }
@@ -223,7 +223,7 @@ namespace Fuzion.Icons
                 try
                 {
                     // Download icons
-                    var iconLinks = FetchIconLinks(program);
+                    var iconLinks = await FetchIconLinksAsync(program).ConfigureAwait(false);
 
                     int fileNameIndex = 0;
 
@@ -316,63 +316,70 @@ namespace Fuzion.Icons
             MainWindow.AnimateLoadingRectangle(false, "geticon" + program?.IconGUID);
         }
 
-        public static string[] FetchIconLinks(Program program)
+        public static async Task<string[]> FetchIconLinksAsync(Program program)
         {
-            // Request
-            WebRequest webRequest;
-            Stream stream;
             string gameName = program?.DisplayName.ToLowerNormalized();
-            //Uri rUri = new Uri("https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key=&st=y&tbm=isch&epq=&oq=&eq=&cr=&tbs=ic:trans,iar:s&searchType=image&num=" + Properties.Settings.Default.IconsPerGame + "&q=" + gameName + " icon");
-            Uri rUri = new Uri($"https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key={Constants.gSearchApiKey}&searchType=image&num={Properties.Settings.Default.IconsPerGame}&q={gameName} icon");
+            string requestUrl = $"https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key={Constants.gSearchApiKey}&searchType=image&num={Properties.Settings.Default.IconsPerGame}&q={gameName} icon";
 
-            webRequest = WebRequest.Create(rUri);
-            stream = webRequest.GetResponse().GetResponseStream();
-            StreamReader streamReader = new StreamReader(stream);
-            string jsonData = streamReader.ReadToEnd();
-            ImageSearchResult searchRes = JsonConvert.DeserializeObject<ImageSearchResult>(jsonData);
-
-            streamReader.Close();
-            stream.Close();
-
-            if(searchRes == null || searchRes.items == null)
+            using (var httpClient = new HttpClient())
             {
-                return Array.Empty<string>();
-            }
-            // Result
-            var result = new string[searchRes.items.Length];
-            for (int i = 0; i < searchRes.items.Length; i++)
-            {
-                result[i] = searchRes.items[i].link;
-            }
+                try
+                {
+                    string jsonData = await httpClient.GetStringAsync(requestUrl).ConfigureAwait(false);
+                    ImageSearchResult searchRes = JsonConvert.DeserializeObject<ImageSearchResult>(jsonData);
 
-            return result;
+                    if (searchRes == null || searchRes.items == null)
+                    {
+                        return Array.Empty<string>();
+                    }
+
+                    // Result
+                    var result = new string[searchRes.items.Length];
+                    for (int i = 0; i < searchRes.items.Length; i++)
+                    {
+                        result[i] = searchRes.items[i].link;
+                    }
+
+                    return result;
+                }
+                catch (HttpRequestException)
+                {
+                    return Array.Empty<string>();
+                }
+            }
         }
 
-        public static string[] FetchIconLinks(string name)
+        public static async Task<string[]> FetchIconLinksAsync(string name)
         {
-            // Request
-            WebRequest webRequest;
-            Stream stream;
             string gameName = name.ToLowerNormalized();
-            Uri rUri = new Uri($"https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key={Constants.gSearchApiKey}&st=y&tbm=isch&epq=&oq=&eq=&cr=&tbs=ic:trans,iar:s&searchType=image&num={Properties.Settings.Default.IconsPerGame}&q={gameName} icon");
+            string requestUrl = $"https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key={Constants.gSearchApiKey}&st=y&tbm=isch&epq=&oq=&eq=&cr=&tbs=ic:trans,iar:s&searchType=image&num={Properties.Settings.Default.IconsPerGame}&q={gameName} icon";
 
-            webRequest = WebRequest.Create(rUri);
-            stream = webRequest.GetResponse().GetResponseStream();
-            StreamReader streamReader = new StreamReader(stream);
-            string jsonData = streamReader.ReadToEnd();
-            ImageSearchResult searchRes = JsonConvert.DeserializeObject<ImageSearchResult>(jsonData);
-
-            streamReader.Close();
-            stream.Close();
-
-            // Result
-            var result = new string[searchRes.items.Length];
-            for (int i = 0; i < searchRes.items.Length; i++)
+            using (var httpClient = new HttpClient())
             {
-                result[i] = searchRes.items[i].link;
-            }
+                try
+                {
+                    string jsonData = await httpClient.GetStringAsync(requestUrl).ConfigureAwait(false);
+                    ImageSearchResult searchRes = JsonConvert.DeserializeObject<ImageSearchResult>(jsonData);
 
-            return result;
+                    if (searchRes == null || searchRes.items == null)
+                    {
+                        return Array.Empty<string>();
+                    }
+
+                    // Result
+                    var result = new string[searchRes.items.Length];
+                    for (int i = 0; i < searchRes.items.Length; i++)
+                    {
+                        result[i] = searchRes.items[i].link;
+                    }
+
+                    return result;
+                }
+                catch (HttpRequestException)
+                {
+                    return Array.Empty<string>();
+                }
+            }
         }
         // REENABLE FOR ONLINE ICONS
         //public static List<string> GetIconLinksForGame(string game, int count)

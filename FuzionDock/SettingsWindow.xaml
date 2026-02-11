@@ -870,6 +870,268 @@
                                   Content=""
                                   FontSize="14"/>
                             </Grid>
+                            <Grid MaxHeight="{Binding StackPanelRowHeight}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="10*"/>
+                                    <ColumnDefinition Width="1*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label
+                        Grid.Column="0"
+                        HorizontalAlignment="Stretch"
+                        Content="Background Auto-Size"
+                        Foreground="White"
+                        FontFamily="Lato Light"
+                        FontSize="14" 
+                        VerticalContentAlignment="Center"
+                        HorizontalContentAlignment="Left"
+                        ToolTip="Automatically size the dock background to fit content"/>
+                                <CheckBox IsChecked="{Binding BackgroundAutoSize, Mode=TwoWay, Source={x:Static properties:Settings.Default}}"
+                                  Grid.Column="1"
+                                  x:Name="BackgroundAutoSizeCheckbox"
+                                  Style="{StaticResource WidgetCheckBox}"
+                                  BorderThickness="0"
+                                  HorizontalContentAlignment="Stretch"
+                                  VerticalContentAlignment="Stretch"
+                                  Content=""
+                                  FontSize="14"
+                                  Click="BackgroundAutoSize_Click"/>
+                            </Grid>
+                            <Grid MaxHeight="{Binding StackPanelRowHeight}" x:Name="BackgroundWidthGrid">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="0.5*"/>
+                                    <ColumnDefinition Width="4*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label
+                        Grid.Row="0"
+                        HorizontalAlignment="Stretch"
+                        Content="Background Width"
+                        Foreground="White"
+                        FontFamily="Lato Light"
+                        FontSize="14" 
+                        VerticalContentAlignment="Center"
+                        HorizontalContentAlignment="Left"/>
+                                <TextBlock Visibility="Visible"
+                                   Grid.Column="1"
+                                   HorizontalAlignment="Right"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ElementName=BackgroundWidthSlider, Path=Value}"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   FontFamily="Lato Light"
+                                   FontSize="14"
+                                   TextAlignment="Center"/>
+                                <Slider Visibility="Visible"
+                                    Name="BackgroundWidthSlider"
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=BackgroundWidth, Mode=TwoWay}"
+                                Grid.Column="2"
+                                Style="{StaticResource RoundedSlider}"
+                                    FocusVisualStyle="{StaticResource FocusVisual}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Foreground="White" 
+                                Minimum="100" 
+                                Maximum="3000" 
+                                SmallChange="10"
+                                LargeChange="50"
+                                    TickFrequency="10"
+                                IsSnapToTickEnabled="True"
+                                ValueChanged="BackgroundSizeExample_ValueChanged"/>
+                            </Grid>
+                            <Grid MaxHeight="{Binding StackPanelRowHeight}" x:Name="BackgroundHeightGrid">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="0.5*"/>
+                                    <ColumnDefinition Width="4*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label
+                        Grid.Row="0"
+                        HorizontalAlignment="Stretch"
+                        Content="Background Height"
+                        Foreground="White"
+                        FontFamily="Lato Light"
+                        FontSize="14" 
+                        VerticalContentAlignment="Center"
+                        HorizontalContentAlignment="Left"/>
+                                <TextBlock Visibility="Visible"
+                                   Grid.Column="1"
+                                   HorizontalAlignment="Right"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ElementName=BackgroundHeightSlider, Path=Value}"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   FontFamily="Lato Light"
+                                   FontSize="14"
+                                   TextAlignment="Center"/>
+                                <Slider Visibility="Visible"
+                                    Name="BackgroundHeightSlider"
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=BackgroundHeight, Mode=TwoWay}"
+                                Grid.Column="2"
+                                Style="{StaticResource RoundedSlider}"
+                                    FocusVisualStyle="{StaticResource FocusVisual}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Foreground="White" 
+                                Minimum="50" 
+                                Maximum="500" 
+                                SmallChange="5"
+                                LargeChange="10"
+                                    TickFrequency="5"
+                                IsSnapToTickEnabled="True"
+                                ValueChanged="BackgroundSizeExample_ValueChanged"/>
+                            </Grid>
+                            <Grid MaxHeight="{Binding StackPanelRowHeight}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="10*"/>
+                                    <ColumnDefinition Width="1*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label
+                        Grid.Column="0"
+                        HorizontalAlignment="Stretch"
+                        Content="Edge to Edge"
+                        Foreground="White"
+                        FontFamily="Lato Light"
+                        FontSize="14" 
+                        VerticalContentAlignment="Center"
+                        HorizontalContentAlignment="Left"
+                        ToolTip="Make the background span the entire screen width"/>
+                                <CheckBox IsChecked="{Binding BackgroundEdgeToEdge, Mode=TwoWay, Source={x:Static properties:Settings.Default}}"
+                                  Grid.Column="1"
+                                  x:Name="BackgroundEdgeToEdgeCheckbox"
+                                  Style="{StaticResource WidgetCheckBox}"
+                                  BorderThickness="0"
+                                  HorizontalContentAlignment="Stretch"
+                                  VerticalContentAlignment="Stretch"
+                                  Content=""
+                                  FontSize="14"
+                                  Click="BackgroundEdgeToEdge_Click"/>
+                            </Grid>
+                            
+                            <Grid MaxHeight="{Binding StackPanelRowHeight}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="0.5*"/>
+                                    <ColumnDefinition Width="4*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label
+                        Grid.Row="0"
+                        HorizontalAlignment="Stretch"
+                        Content="Background Opacity"
+                        Foreground="White"
+                        FontFamily="Lato Light"
+                        FontSize="14" 
+                        VerticalContentAlignment="Center"
+                        HorizontalContentAlignment="Left"/>
+                                <TextBlock Visibility="Visible"
+                                   Grid.Column="1"
+                                   HorizontalAlignment="Right"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ElementName=BackgroundOpacitySlider, Path=Value, StringFormat={}{0:P0}}"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   FontFamily="Lato Light"
+                                   FontSize="14"
+                                   TextAlignment="Center"/>
+                                <Slider Visibility="Visible"
+                                    Name="BackgroundOpacitySlider"
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=BackgroundOpacity, Mode=TwoWay}"
+                                Grid.Column="2"
+                                Style="{StaticResource RoundedSlider}"
+                                    FocusVisualStyle="{StaticResource FocusVisual}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Foreground="White" 
+                                Minimum="0" 
+                                Maximum="1" 
+                                SmallChange="0.1"
+                                LargeChange="0.25" 
+                                IsSnapToTickEnabled="False"
+                                ValueChanged="BackgroundVisuals_ValueChanged"/>
+                            </Grid>
+
+                            <Grid MaxHeight="{Binding StackPanelRowHeight}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="0.5*"/>
+                                    <ColumnDefinition Width="4*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label
+                        Grid.Row="0"
+                        HorizontalAlignment="Stretch"
+                        Content="Corner Radius"
+                        Foreground="White"
+                        FontFamily="Lato Light"
+                        FontSize="14" 
+                        VerticalContentAlignment="Center"
+                        HorizontalContentAlignment="Left"/>
+                                <TextBlock Visibility="Visible"
+                                   Grid.Column="1"
+                                   HorizontalAlignment="Right"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ElementName=BackgroundRadiusSlider, Path=Value}"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   FontFamily="Lato Light"
+                                   FontSize="14"
+                                   TextAlignment="Center"/>
+                                <Slider Visibility="Visible"
+                                    Name="BackgroundRadiusSlider"
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=BackgroundCornerRadius, Mode=TwoWay}"
+                                Grid.Column="2"
+                                Style="{StaticResource RoundedSlider}"
+                                    FocusVisualStyle="{StaticResource FocusVisual}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Foreground="White" 
+                                Minimum="0" 
+                                Maximum="50" 
+                                SmallChange="1"
+                                LargeChange="5" 
+                                IsSnapToTickEnabled="True"
+                                ValueChanged="BackgroundVisuals_ValueChanged"/>
+                            </Grid>
+
+                            <Grid MaxHeight="{Binding StackPanelRowHeight}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="0.5*"/>
+                                    <ColumnDefinition Width="4*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label
+                        Grid.Row="0"
+                        HorizontalAlignment="Stretch"
+                        Content="Icon Spacing"
+                        Foreground="White"
+                        FontFamily="Lato Light"
+                        FontSize="14" 
+                        VerticalContentAlignment="Center"
+                        HorizontalContentAlignment="Left"/>
+                                <TextBlock Visibility="Visible"
+                                   Grid.Column="1"
+                                   HorizontalAlignment="Right"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ElementName=IconSpacingSlider, Path=Value, StringFormat={}{0:F1}}"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   FontFamily="Lato Light"
+                                   FontSize="14"
+                                   TextAlignment="Center"/>
+                                <Slider Visibility="Visible"
+                                    Name="IconSpacingSlider"
+                                    Value="{Binding Source={x:Static properties:Settings.Default}, Path=IconSpacing, Mode=TwoWay}"
+                                Grid.Column="2"
+                                Style="{StaticResource RoundedSlider}"
+                                    FocusVisualStyle="{StaticResource FocusVisual}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Foreground="White" 
+                                Minimum="0" 
+                                Maximum="20" 
+                                SmallChange="0.5"
+                                LargeChange="2" 
+                                IsSnapToTickEnabled="False"
+                                ValueChanged="IconSpacing_ValueChanged"/>
+                            </Grid>
                         </StackPanel>
                         <TextBlock Height="100" Grid.Row="1" x:Name="VersionTextBox" 
                                Text="0.3.0.0 b" 

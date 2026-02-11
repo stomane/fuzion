@@ -177,6 +177,7 @@
         <local:PercentageOfElement x:Key="PercentageOfElementConverter"/>
         <local:ScrollViewerBackgroundColor x:Key="ScrollViewerBackgroundColorConverter"/>
         <sys:Double x:Key="10%">0.1</sys:Double>
+        <sys:Double x:Key="1%">0.01</sys:Double>
     </Window.Resources>
     <Window.Triggers>
         <EventTrigger RoutedEvent="FrameworkElement.Loaded">
@@ -282,35 +283,30 @@
             <ColumnDefinition Name="DockRowLeftRight" Width="0"/>
             <ColumnDefinition Name="DockLocationRight" Width="0"/>
         </Grid.ColumnDefinitions>-->
-        <ScrollViewer
-            PanningMode="HorizontalOnly"
-            Grid.Row="1"
-            AllowDrop="True"
-            PreviewKeyDown="GridScrollViewer_PreviewKeyDown"
-            DragEnter="GridScrollViewer_DragEnter"
-            Loaded="GridScrollViewer_Loaded"
-            HorizontalContentAlignment="Center"
-            Background="{Binding Converter={StaticResource ScrollViewerBackgroundColorConverter}}"
-            x:Name="GridScrollViewer" 
-            HorizontalScrollBarVisibility="Hidden" 
-            VerticalScrollBarVisibility="Hidden" 
-            PreviewMouseWheel="GridScrollViewer_PreviewMouseWheel"
-            ScrollChanged="GridScrollViewer_ScrollChanged"
-            Focusable="False" 
-            FocusVisualStyle="{x:Null}"
-            >
+        <Border x:Name="DockBackgroundBorder" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Top">
+            <ScrollViewer
+                PanningMode="HorizontalOnly"
+                AllowDrop="True"
+                PreviewKeyDown="GridScrollViewer_PreviewKeyDown"
+                DragEnter="GridScrollViewer_DragEnter"
+                Loaded="GridScrollViewer_Loaded"
+                HorizontalContentAlignment="Center"
+                Background="Transparent"
+                x:Name="GridScrollViewer" 
+                HorizontalScrollBarVisibility="Hidden" 
+                VerticalScrollBarVisibility="Hidden" 
+                PreviewMouseWheel="GridScrollViewer_PreviewMouseWheel"
+                ScrollChanged="GridScrollViewer_ScrollChanged"
+                Focusable="False" 
+                FocusVisualStyle="{x:Null}"
+                Width="Auto"
+                HorizontalAlignment="Center"
+                Padding="0,0,0,0"
+                >
             <!--local:AdvancedZooming.KeepInCenter="True"-->
             
             <!--The content we are scrolling is the grid with the offsets and the dock in the  middle col-->
             <Grid x:Name="GridScrollOffsetParent">
-                <!--Columns for top and bottom position-->
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Name="OffsetBefore"
-                                      Width="{Binding ActualWidth,  ElementName=MainParent, Converter={StaticResource PercentageOfElementConverter}, ConverterParameter={StaticResource 10%}}"/>
-                    <ColumnDefinition Name="MiddleGrid" Width="*"/>
-                    <ColumnDefinition Name="OffsetAfter" 
-                                      Width="{Binding ActualWidth,  ElementName=MainParent, Converter={StaticResource PercentageOfElementConverter}, ConverterParameter={StaticResource 10%}}"/>
-                </Grid.ColumnDefinitions>
              
                 <!--Rows for left and right position-->
                 <!--<Grid.RowDefinitions>
@@ -330,7 +326,6 @@
                     TimeDuration="00:00:00.20"/>-->
                 <!--The actual game dock grid-->
                 <Grid x:Name="mainGrid" 
-                      Grid.Column="1" 
                       Grid.Row="1" 
                       Background="#01000000" 
                       Width="Auto" 
@@ -341,15 +336,9 @@
                 </Grid>
             </Grid>
             
-            <ScrollViewer.OpacityMask>
-                <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5" >
-                    <GradientStop/>
-                    <GradientStop Color="White" Offset="0.1"/>
-                    <GradientStop Color="White" Offset="0.9"/>
-                    <GradientStop Offset="1"/>
-                </LinearGradientBrush>
-            </ScrollViewer.OpacityMask>
+
         </ScrollViewer>
+        </Border>
         <Grid x:Name="AuxGrid">
             <Grid.RowDefinitions>
                 <RowDefinition/>

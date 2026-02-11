@@ -70,12 +70,13 @@ namespace Fuzion.Programs
 
         static List<string> ResolveShortcutPath(string filePath)
         {
-            // IWshRuntimeLibrary is in the COM library "Windows Script Host Object Model"
-            IWshRuntimeLibrary.WshShell shell = new IWshRuntimeLibrary.WshShell();
+            // Use dynamic binding instead of direct COM reference
+            Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+            dynamic shell = Activator.CreateInstance(shellType);
 
             try
             {
-                IWshRuntimeLibrary.IWshShortcut shortcut = (IWshRuntimeLibrary.IWshShortcut)shell.CreateShortcut(filePath);
+                dynamic shortcut = shell.CreateShortcut(filePath);
                 List<string> result = new List<string> { shortcut.TargetPath, shortcut.Arguments };
                 return result;
             }

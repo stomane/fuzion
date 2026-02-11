@@ -12,7 +12,7 @@ using static Fuzion.LauncherSpecific.BattleNet;
 using System.Windows;
 using static Fuzion.Native.NativeMethods;
 using static Fuzion.SettingsManager.GeneralSettings;
-using Windows.System;
+
 using Fuzion.Extensions;
 
 namespace Fuzion.Programs

@@ -1,4 +1,4 @@
-﻿//using Renci.SshNet;
+//using Renci.SshNet;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -42,7 +42,7 @@ namespace Fuzion.Native
 
         private static bool canSetTopmost;
 
-        delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+        public delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
         private static WinEventDelegate stickyDelegate = null;
         private static IntPtr m_hhook = IntPtr.Zero;
 
@@ -82,14 +82,20 @@ namespace Fuzion.Native
 
         #region Active Window Hook
 
-        [DllImport("user32.dll")]
-        static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+       [DllImport("user32.dll")]
+        public static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
 
         private const uint WINEVENT_OUTOFCONTEXT = 0;
         private const uint EVENT_SYSTEM_FOREGROUND = 3;
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
         public static bool stickToDesktopActive = false;
 
@@ -396,8 +402,8 @@ namespace Fuzion.Native
 
         #region Window Title
         // Old method
-        [DllImport("user32.dll")]
-        static extern IntPtr GetForegroundWindow();
+
+
 
         private static string GetActiveWindowTitle() //Could change it to suit my needs better, it's good for now. : The name return value is useful if I need to expand on when the MW is topmost
         {
@@ -839,7 +845,8 @@ namespace Fuzion.Native
 
         //}
 
-        static Shell32.ShellClass sh;
+        //static Shell32.ShellClass sh;
+        static dynamic sh;
         public static bool minimizedAll;
         /// <summary>
         /// Add proper sh.UndoMinimizeAll detection
@@ -849,7 +856,9 @@ namespace Fuzion.Native
             if(sh == null)
             {
                 Console.WriteLine("Shell was null attempting to show desktop, creating it");
-                sh = new Shell32.ShellClass();
+                //sh = new Shell32.ShellClass();
+                Type shellType = Type.GetTypeFromProgID("Shell.Application");
+                sh = Activator.CreateInstance(shellType);
             }
 
             //sh.ToggleDesktop();
@@ -887,7 +896,9 @@ namespace Fuzion.Native
             if (sh == null)
             {
                 Console.WriteLine("Shell was null attempting to show desktop, creating it");
-                sh = new Shell32.ShellClass();
+                //sh = new Shell32.ShellClass();
+                Type shellType = Type.GetTypeFromProgID("Shell.Application");
+                sh = Activator.CreateInstance(shellType);
             }
 
             //sh.ToggleDesktop();

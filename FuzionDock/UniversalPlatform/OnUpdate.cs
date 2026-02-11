@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using System.Globalization;
-using Windows.Storage;
 using System.Configuration;
 
 namespace Fuzion.UniversalPlatform
@@ -14,32 +13,12 @@ namespace Fuzion.UniversalPlatform
     {
         public static void UpdateUWPSettings()
         {
-            if (Startup.IsUniversalPlatform)
-            {
-                foreach (SettingsPropertyValue value in Properties.Settings.Default.PropertyValues)
-                {
-                    ApplicationData.Current.LocalSettings.Values[value.Name] = value.PropertyValue;
-                }
-            }
+            // Removed UWP dependency
         }
 
         public static void LoadUWPSettings()
         {
-            if (Startup.IsUniversalPlatform)
-            {
-                foreach (var setting in ApplicationData.Current.LocalSettings.Values)
-                {
-                    foreach (SettingsPropertyValue s in Properties.Settings.Default.PropertyValues)
-                    {
-                        if (s.Name == setting.Key)
-                        {
-                            s.PropertyValue = setting.Value;
-                        }
-                    }
-                }
-
-                Properties.Settings.Default.Save();
-            }
+            // Removed UWP dependency
         }
     }
 }

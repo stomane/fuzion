@@ -151,7 +151,7 @@ namespace Fuzion.Programs
         {
             if (Properties.Settings.Default.FetchOnlineIcon)
             {
-                _ = Task.Run(() => Icons.IconManager.DownloadIcon(this));
+                _ = Icons.IconManager.DownloadIcon(this);
             }
             else
             {

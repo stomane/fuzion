@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Windows;
 using SharpDX.XInput;
@@ -7,6 +7,8 @@ using static Fuzion.Programs.Launch;
 using static Fuzion.Programs.ProgramManager;
 using Fuzion.Icons;
 using Fuzion.Extensions;
+using Fuzion.Native;
+using System.Text;
 
 namespace Fuzion.Gamepad
 {
@@ -291,14 +293,32 @@ namespace Fuzion.Gamepad
             }
         }
 
+                private static bool IsDesktopForeground(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero) return false;
+
+            StringBuilder className = new StringBuilder(256);
+            NativeMethods.GetClassName(hwnd, className, className.Capacity);
+            
+            return className.ToString() == "Progman" || className.ToString() == "WorkerW";
+        }
+
         /// <summary>
         /// Forward gamepad button presses only when Fuzion is the foreground app
         /// </summary>
         public static void NavigateFuzion(State s)
         {
-            if (!MainWindowActive)
+            IntPtr foreground = NativeMethods.GetForegroundWindow();
+            bool isDesktop = IsDesktopForeground(foreground);
+            
+            // Allow if:
+            // 1. Fuzion is Foreground (Handle match)
+            // 2. OR Desktop is Foreground (Progman/WorkerW)
+            // If neither is true, we are in another app -> Block Input
+            if (foreground != MainWindow.Handle && !isDesktop)
             {
-                Console.WriteLine("Main Window Inactive - not reading Gamepad");
+                //Console.WriteLine("Main Window Inactive - not reading Gamepad");
+                MainWindow.ForceDeactivate();
                 return;
             }
 
