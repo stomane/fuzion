@@ -15,7 +15,7 @@ Here are videos showing some of its features:
 
 ## Current Status
 
-Fuzion has been published to the Windows Store as a UWP app and a Standalone app but is currently not showing the dock in the newer versions of Windows 10/11, probably because of changes in Desktop rendering.
+Fuzion has been published to the Windows Store as a UWP app and a Standalone app, but those published builds are currently not showing the dock on newer versions of Windows 10/11, probably because of changes in Desktop rendering. The latest version in this repository has been updated and confirmed working on Windows 11 - build it yourself following the instructions below rather than using the Store builds.
 
 **Windows Store Links:**
 - [Fuzion Dock (UWP)](https://apps.microsoft.com/detail/9MTL580GPQ00?hl=en-us&gl=US&ocid=pdpshare)
