@@ -14,6 +14,8 @@ namespace Fuzion
             public string IgdbProxyUrl { get; set; }
             public string DbPassword { get; set; }
             public string SteamApiKey { get; set; }
+            public string GeminiApiKey { get; set; }
+            public string GeminiModel { get; set; }
         }
 
         private static readonly LocalSecrets localSecrets = LoadLocalSecrets();
@@ -33,9 +35,21 @@ namespace Fuzion
             localSecrets?.DbPassword,
             "dbPassword.txt");
 
+        public static string geminiApiKey = GetConfiguredValue(
+            "GEMINI_API_KEY",
+            localSecrets?.GeminiApiKey,
+            null);
+
+        public static string geminiModel = GetConfiguredValue(
+            "GEMINI_MODEL",
+            localSecrets?.GeminiModel,
+            null);
+
         public static bool HasGoogleSearchApiKey => !string.IsNullOrWhiteSpace(gSearchApiKey);
         public static bool HasIgdbProxyUrl => !string.IsNullOrWhiteSpace(igdbProxyURL);
-        public static bool IsOfflineMode => !HasGoogleSearchApiKey && !HasIgdbProxyUrl;
+        public static bool HasGeminiApiKey => !string.IsNullOrWhiteSpace(geminiApiKey);
+        public static string GeminiModel => string.IsNullOrWhiteSpace(geminiModel) ? "gemini-2.5-flash" : geminiModel.Trim();
+        public static bool IsOfflineMode => !HasGoogleSearchApiKey && !HasIgdbProxyUrl && !HasGeminiApiKey;
 
         private static LocalSecrets LoadLocalSecrets()
         {
@@ -73,6 +87,11 @@ namespace Fuzion
             if (!string.IsNullOrWhiteSpace(localSecretValue))
             {
                 return localSecretValue.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(legacyFileName))
+            {
+                return string.Empty;
             }
 
             return ReadLegacySecretFile(legacyFileName);

@@ -69,8 +69,20 @@ The current app uses:
 - `GoogleSearchApiKey` for online icon and executable lookup
 - `IgdbProxyUrl` for IGDB-backed game detection
 - `DbPassword` for the legacy remote database path
+- `GeminiApiKey` for batched LLM-based game classification fallback
+- `GeminiModel` to override the default `gemini-2.5-flash`
 
 The current codebase does not consume a Steam API key directly; Steam store search uses the `SteamStoreQuery` package without a project-specific local key.
+
+Gemini setup for this repo:
+
+1. Open [Google AI Studio](https://aistudio.google.com/apikey).
+2. Import the Google Cloud project you want to bill against if it is not already visible.
+3. Create a new Gemini API key there. New keys are auth keys by default.
+4. Restrict the key to Gemini API only.
+5. Put the value in `FuzionDock/local.secrets.json` as `GeminiApiKey` or set `GEMINI_API_KEY` in your environment.
+
+The current implementation uses Gemini structured JSON output through the Gemini `generateContent` API to classify a batch of detected programs and return only actual games.
 
 If the API keys are missing, Fuzion now starts in a plain offline mode: local launcher detection and local icons still work, while Google image search and IGDB lookups are skipped.
 

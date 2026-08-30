@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Fuzion.AI;
 using Fuzion.Extensions;
 using Fuzion.Programs;
 
@@ -13,6 +14,58 @@ namespace Fuzion.IGDB
 {
     class GameCheck
     {
+        private static readonly object batchDecisionLock = new object();
+        private static HashSet<string> batchKnownPrograms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static Dictionary<string, string> batchGamePrograms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        public static void PreloadBatchGameDecisions(IEnumerable<Program> programs)
+        {
+            Dictionary<string, string> detectedGames = GeminiGameClassifier.ClassifyGames(programs).ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
+            HashSet<string> candidates = new HashSet<string>(
+                programs
+                    .Where(program => program != null && !string.IsNullOrWhiteSpace(program.DisplayName))
+                    .Select(program => program.DisplayName),
+                StringComparer.OrdinalIgnoreCase);
+
+            lock (batchDecisionLock)
+            {
+                batchKnownPrograms = candidates;
+                batchGamePrograms = detectedGames;
+            }
+        }
+
+        private static bool TryGetBatchDecision(Program prog, out bool isGame)
+        {
+            isGame = false;
+
+            if (prog == null || string.IsNullOrWhiteSpace(prog.DisplayName))
+            {
+                return false;
+            }
+
+            lock (batchDecisionLock)
+            {
+                if (!batchKnownPrograms.Contains(prog.DisplayName))
+                {
+                    return false;
+                }
+
+                if (batchGamePrograms.TryGetValue(prog.DisplayName, out string canonicalTitle))
+                {
+                    if (string.IsNullOrWhiteSpace(prog.DockName) || string.Equals(prog.DockName, prog.DisplayName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        prog.DockName = canonicalTitle;
+                    }
+
+                    isGame = true;
+                    return true;
+                }
+
+                isGame = false;
+                return true;
+            }
+        }
+
         //this returns a bool which says whether it's a game or not, needs to check local data and other places too
         // Will not return partial matches, have to try changing that
 
@@ -76,6 +129,13 @@ namespace Fuzion.IGDB
                     //prog.IsGame = false;
                     //return false;
                     falseCount++;
+                }
+
+                if (TryGetBatchDecision(prog, out bool batchIsGame))
+                {
+                    Console.WriteLine($"{prog.DisplayName} resolved by Gemini batch classifier: {batchIsGame}");
+                    prog.IsGame = batchIsGame;
+                    return batchIsGame;
                 }
 
                 // Is it in the Fuzion online database?

@@ -81,20 +81,29 @@ namespace Fuzion.Scanner
         {
             if (!ScanInProgress)
             {
-                await Task.Run(() => DeepScan(ScanType.Rescan)).ConfigureAwait(false);
+                try
+                {
+                    await Task.Run(() => DeepScan(ScanType.Rescan)).ConfigureAwait(false);
 
-                missingProgramsList = GetMissingPrograms();
-                addedProgramsList = GetAddedPrograms();
+                    missingProgramsList = GetMissingPrograms();
+                    addedProgramsList = GetAddedPrograms();
 
-                // Add recently installed games
-                InstantlyAddNewGames();
-                // Remove recently uninstalled games
-                InstantlyRemoveMissingGames();
+                    // Add recently installed games
+                    InstantlyAddNewGames();
+                    // Remove recently uninstalled games
+                    InstantlyRemoveMissingGames();
 
-                // update the programObjectsList after all games have been updated
-                ProgramObjects = updatedProgramList.ToList();
+                    // update the programObjectsList after all games have been updated
+                    ProgramObjects = updatedProgramList.ToList();
 
-                UpdateSettings();
+                    UpdateSettings();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Rescan.UpdatePrograms failed: {ex}");
+                    StopAnimatingLoadingRectangle();
+                    ScanInProgress = false;
+                }
             }
         }
 

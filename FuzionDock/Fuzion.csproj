@@ -173,6 +173,7 @@
   <ItemGroup>
     <Compile Include="AdvancedZooming.cs" />
     <Compile Include="Analytics\AnalyticsHelper.cs" />
+    <Compile Include="AI\GeminiGameClassifier.cs" />
     <Compile Include="Cleanup\Clean.cs" />
     <Compile Include="Cleanup\RemoveObsolete.cs" />
     <Compile Include="Constants.cs" />

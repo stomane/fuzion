@@ -429,6 +429,8 @@ namespace Fuzion.Programs
         {
             if (programList != null && programList.Count > 0)
             {
+                GameCheck.PreloadBatchGameDecisions(programList);
+
                 //Normal loop
                 _ = Parallel.ForEach(programList, (program, state, index) =>
                     {
