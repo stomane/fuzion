@@ -317,6 +317,11 @@ namespace Fuzion.Icons
 
         public static async Task<string[]> FetchIconLinksAsync(Program program)
         {
+            if (!Constants.HasGoogleSearchApiKey)
+            {
+                return Array.Empty<string>();
+            }
+
             string gameName = program?.DisplayName.ToLowerNormalized();
             string requestUrl = $"https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key={Constants.gSearchApiKey}&searchType=image&num={Properties.Settings.Default.IconsPerGame}&q={gameName} icon";
 
@@ -350,6 +355,11 @@ namespace Fuzion.Icons
 
         public static async Task<string[]> FetchIconLinksAsync(string name)
         {
+            if (!Constants.HasGoogleSearchApiKey)
+            {
+                return Array.Empty<string>();
+            }
+
             string gameName = name.ToLowerNormalized();
             string requestUrl = $"https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key={Constants.gSearchApiKey}&st=y&tbm=isch&epq=&oq=&eq=&cr=&tbs=ic:trans,iar:s&searchType=image&num={Properties.Settings.Default.IconsPerGame}&q={gameName} icon";
 

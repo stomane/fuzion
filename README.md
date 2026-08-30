@@ -62,6 +62,8 @@ The app reads configuration from environment variables now. The main ones curren
 
 Those values are not required for the project to build, but some runtime features will not work without them.
 
+If the API keys are missing, Fuzion now starts in a plain offline mode: local launcher detection and local icons still work, while Google image search and IGDB lookups are skipped.
+
 ## License
 
 See [LICENSE](LICENSE) file for details.

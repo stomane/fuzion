@@ -305,7 +305,7 @@ namespace Fuzion
                 }
                 else
                 {
-                    OpenWindow.Notification(Properties.Resources.UnsupportedFormatMessage);
+                    OpenWindow.Notification(UiText.UnsupportedFormatMessage);
                 }
             }
         }
@@ -346,7 +346,7 @@ namespace Fuzion
 
             if (pathTypeSelector.SelectedIndex == 0)
             {
-                pathTextBox.Text = Properties.Resources.PathPathType;
+                pathTextBox.Text = UiText.PathPathType;
                 pathTextBox.IsReadOnly = true;
                 selectPathButton.Visibility = Visibility.Visible;
                 newPathType = PathType.Path;
@@ -355,7 +355,7 @@ namespace Fuzion
             }
             else
             {
-                pathTextBox.Text = Properties.Resources.URIPathType;
+                pathTextBox.Text = UiText.UriPathType;
                 pathTextBox.IsReadOnly = false;
                 selectPathButton.Visibility = Visibility.Hidden;
                 newPathType = PathType.URI;
@@ -745,7 +745,7 @@ namespace Fuzion
             }
             catch (Exception)
             {
-                OpenWindow.Notification(Properties.Resources.UnsupportedFormatMessage);
+                OpenWindow.Notification(UiText.UnsupportedFormatMessage);
             }
         }
 

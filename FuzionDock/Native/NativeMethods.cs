@@ -14,6 +14,11 @@ namespace Fuzion.Native
 {
     internal static class NativeMethods
     {
+        public static bool SupportsLegacyDesktopDocking()
+        {
+            return Environment.OSVersion.Version.Build < 22000;
+        }
+
         #region Blur specific
         [StructLayout(LayoutKind.Sequential)]
         public struct DWM_BLURBEHIND
@@ -75,6 +80,9 @@ namespace Fuzion.Native
         public const int SW_SHOWMAXIMIZED = 3;
         public const int SW_SHOWDEFAULT = 10;
         public const int SW_SHOWNORMAL = 1;
+
+        [DllImport("user32.dll")]
+        public static extern bool IsWindowVisible(IntPtr hWnd);
 
         [DllImport("user32.dll")]
         public static extern bool ShowWindowAsync(HandleRef hWnd, int nCmdShow);

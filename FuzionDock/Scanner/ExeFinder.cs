@@ -120,7 +120,7 @@ namespace Fuzion.Scanner
                     }
 
                     //Then check online if score doesn't add up
-                    if (tempExeHolder.Score[lastIndex] < 3)
+                    if (tempExeHolder.Score[lastIndex] < 3 && Constants.HasGoogleSearchApiKey)
                     {
                         try
                         {

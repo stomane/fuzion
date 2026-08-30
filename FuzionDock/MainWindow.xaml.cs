@@ -298,6 +298,7 @@ namespace Fuzion
             InitEvents();
             InitSettings();
             CheckForSettings();
+            EnsureVisibleAfterStartup();
             AddSearchKeyPressEvents();
             _ = Task.Run(() => SquirrelUpdate.Update());
             _ = Task.Run(() => SettingsWindow.GetDynamicImages());
@@ -310,7 +311,10 @@ namespace Fuzion
         {
             SetMainScreenRelativeWidthHeight();
             CreateDirectories();
-            HideFromTaskSwitcher();
+            if (ShouldUseLegacyDesktopDocking())
+            {
+                HideFromTaskSwitcher();
+            }
             SetupMinimizePreventionHook();
             //Dock.Scrolling.EnableSmoothScrolling();
             ScrollTimer.Start();
@@ -615,26 +619,26 @@ namespace Fuzion
                 //Check if settings exist
                 if (File.Exists(Fuzion.MainWindow.DefaultAssetPath + @"programs\programs.xml")
                 && File.Exists(Fuzion.MainWindow.DefaultAssetPath + @"programs\games.xml"))
-            {
-                Console.WriteLine("Files exist, loading...");
-                Load();
-            }
-            else
-            {
-                //Create or Scan
-                if (HasNetworkConnection("https://igdb.com"))
                 {
-                    Console.WriteLine("Creating grid for deepscan");
-                    CreateGrid();
-                    _ = Task.Run(() => DeepScan());
+                    Console.WriteLine("Files exist, loading...");
+                    Load();
                 }
                 else
                 {
-                    //No internet or can't reach IGDB UI icon here
-                    OpenWindow.Notification("Could not perform initial scan. Can't reach IGDB, or not connected to the internet. Add games manually or rescan later.", Properties.Resources.NoInternet);
+                    Console.WriteLine("No saved dock data found. Creating grid for initial scan.");
                     CreateGrid();
+
+                    if (Constants.HasIgdbProxyUrl && HasNetworkConnection("https://igdb.com"))
+                    {
+                        Console.WriteLine("Starting initial scan with online metadata.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Starting initial scan in offline mode.");
+                    }
+
+                    _ = Task.Run(() => DeepScan());
                 }
-            }
 
             }
             // Handle exception on startup
@@ -651,6 +655,33 @@ namespace Fuzion
             }
 
             TestArea();
+        }
+
+        // Fall back to a normal top-level window when desktop docking leaves the window hidden.
+        private void EnsureVisibleAfterStartup()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (Handle == IntPtr.Zero || Native.NativeMethods.IsWindowVisible(Handle))
+                {
+                    return;
+                }
+
+                Console.WriteLine("Main dock window is hidden after startup. Falling back to a visible top-level window.");
+
+                if (Settings.Default.StickToDesktop)
+                {
+                    SetOnDesktop(this, false);
+                }
+
+                WindowState = WindowState.Normal;
+                Visibility = Visibility.Visible;
+                Show();
+                Topmost = true;
+                Topmost = false;
+                CenterWindowOnScreen(System.Reflection.MethodBase.GetCurrentMethod().Name);
+                Activate();
+            }), DispatcherPriority.ContextIdle);
         }
 
 
@@ -769,8 +800,16 @@ namespace Fuzion
 
             if (Settings.Default.StickToDesktop)
             {
-                //ActivateStickToDesktop(); //old method
-                SetOnDesktop(this, true);
+                if (ShouldUseLegacyDesktopDocking())
+                {
+                    //ActivateStickToDesktop(); //old method
+                    SetOnDesktop(this, true);
+                }
+                else
+                {
+                    Console.WriteLine("Skipping legacy desktop docking on this Windows build. Showing a normal dock window instead.");
+                    ShowInTaskbar = true;
+                }
             }
 
             // Shadow Launch
@@ -829,6 +868,11 @@ namespace Fuzion
         private static void CreateTaskbarIcon()
         {
             _ = new Icons.TrayIcon();
+        }
+
+        private static bool ShouldUseLegacyDesktopDocking()
+        {
+            return Settings.Default.StickToDesktop && Native.NativeMethods.SupportsLegacyDesktopDocking();
         }
 
         #region Chat Apps
@@ -1133,7 +1177,7 @@ namespace Fuzion
             }
             catch (Exception)
             {
-                OpenWindow.Notification("Something went wrong...", Properties.Resources.UnsupportedFormatMessage);
+                OpenWindow.Notification("Something went wrong...", UiText.UnsupportedFormatMessage);
             }
         }
 

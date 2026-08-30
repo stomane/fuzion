@@ -144,6 +144,12 @@ namespace Fuzion.IGDB
 
         public static bool IsIGDB(string name)
         {
+            if (!Constants.HasIgdbProxyUrl)
+            {
+                Console.WriteLine("Skipping IGDB lookup because offline mode is active.");
+                return false;
+            }
+
             // Check IGDB
             #region IGDB Check
             string comparisonLine;

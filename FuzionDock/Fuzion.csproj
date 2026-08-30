@@ -284,6 +284,7 @@
     <Compile Include="Programs\ProgramManager.cs" />
     <Compile Include="ScrollViewerOffsetMediator.cs" />
     <Compile Include="Settings.cs" />
+    <Compile Include="UiText.cs" />
     <Compile Include="SettingsWindow.xaml.cs">
       <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>

@@ -24,7 +24,7 @@ namespace Fuzion.Icons
 
             Stream stream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/trayIconColor.ico")).Stream;
             notifyIcon.Icon = new Icon(stream);
-            notifyIcon.Text = Resources.FuzionAppName;
+            notifyIcon.Text = UiText.AppName;
             notifyIcon.BalloonTipIcon = ToolTipIcon.Info;
 
             ContextMenu nMenu = new ContextMenu();
@@ -33,25 +33,25 @@ namespace Fuzion.Icons
 
             MenuItem exit_menuItem = new MenuItem
             {
-                Text = Resources.ContextMenuExitLabel
+                Text = UiText.MenuExit
             };
             exit_menuItem.Click += Exit_menuItem_Click;
 
             MenuItem settings_menuItem = new MenuItem
             {
-                Text = Resources.ContextMenuSettingsLabel
+                Text = UiText.MenuSettings
             };
             settings_menuItem.Click += Settings_menuItem_Click;
 
             MenuItem rescan_menuItem = new MenuItem
             {
-                Text = Resources.ContextMenuRescanLabel
+                Text = UiText.MenuRescan
             };
             rescan_menuItem.Click += Rescan_menuItem_Click;
 
             MenuItem add_menuItem = new MenuItem
             {
-                Text = Resources.ContextMenuAddLabel
+                Text = UiText.MenuAdd
             };
             add_menuItem.Click += Add_menuItem_Click;
 

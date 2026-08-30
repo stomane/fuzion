@@ -149,7 +149,7 @@ namespace Fuzion.Programs
 
         public void FetchIcon()
         {
-            if (Properties.Settings.Default.FetchOnlineIcon)
+            if (Properties.Settings.Default.FetchOnlineIcon && Constants.HasGoogleSearchApiKey)
             {
                 _ = Icons.IconManager.DownloadIcon(this);
             }
