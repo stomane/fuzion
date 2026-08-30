@@ -454,13 +454,20 @@ namespace Fuzion.Programs
 
         private static void ProgramToGrid(Program program)
         {
+            if (program == null || string.IsNullOrWhiteSpace(program.DisplayName))
+            {
+                Console.WriteLine("[ProgramToGrid] Skipping: null program or DisplayName");
+                return;
+            }
+
+            Console.WriteLine($"[ProgramToGrid] Processing: {program.DisplayName}");
             AnimateLoadingRectangle(true, "ptg" + program.IconGUID);
-            Console.WriteLine("Checking for " + program.DisplayName);
             if (GameCheck.IsGame(program))
             {
+                Console.WriteLine($"[ProgramToGrid] {program.DisplayName}: GAME detected");
                 // Add the name to the new games list to check for db readyness before the fetchicon and fetchexe occur
                 RecentlyAddedGameNames.Add(program.DisplayName);
-                Console.WriteLine("Adding " + program.DisplayName + " to recently added games list");
+                Console.WriteLine($"[ProgramToGrid] {program.DisplayName}: added to recently added games list");
 
                 // Make sure we run this last as it will update links
                 // in GameObjects and RecentlyAddedGames lisits
@@ -493,6 +500,10 @@ namespace Fuzion.Programs
                 }));
 
 
+            }
+            else
+            {
+                Console.WriteLine($"[ProgramToGrid] {program.DisplayName}: NOT a game");
             }
 
             AnimateLoadingRectangle(false, "ptg" + program.IconGUID);

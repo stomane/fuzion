@@ -29,6 +29,7 @@ namespace Fuzion.AI
 
             if (!Constants.HasGeminiApiKey || programs == null)
             {
+                Console.WriteLine($"[Gemini] Skipping: HasKey={Constants.HasGeminiApiKey}, ProgramsNull={programs == null}");
                 return result;
             }
 
@@ -37,37 +38,82 @@ namespace Fuzion.AI
                 .Select((program, index) => new BatchCandidate { Index = index, Program = program })
                 .ToList();
 
+            Console.WriteLine($"[Gemini] Found {candidates.Count} candidates to classify out of {programs.Count()} total programs");
+
             if (candidates.Count == 0)
             {
+                Console.WriteLine("[Gemini] No candidates to classify, returning empty result");
                 return result;
             }
 
+            int batchNum = 0;
             foreach (var batch in Batch(candidates, MaxBatchSize))
             {
+                batchNum++;
                 try
                 {
-                    foreach (var classification in ClassifyBatch(batch))
+                    Console.WriteLine($"[Gemini] Processing batch {batchNum} with {batch.Count} items");
+                    var batchResult = ClassifyBatch(batch);
+                    Console.WriteLine($"[Gemini] Batch {batchNum} returned {batchResult.Count} classifications");
+                    foreach (var classification in batchResult)
                     {
+                        Console.WriteLine($"[Gemini] Classification: {classification.Key} => {classification.Value}");
                         result[classification.Key] = classification.Value;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Gemini classification batch failed: {ex.Message}");
+                    Console.WriteLine($"[Gemini] Batch {batchNum} failed: {ex.GetType().Name}: {ex.Message}");
+                    if (ex.InnerException != null)
+                    {
+                        Console.WriteLine($"[Gemini] Inner exception: {ex.InnerException.Message}");
+                    }
                 }
             }
 
+            Console.WriteLine($"[Gemini] Classification complete: {result.Count} games identified");
             return result;
         }
 
         private static bool ShouldClassify(Program program)
         {
-            return program != null
-                && !string.IsNullOrWhiteSpace(program.DisplayName)
-                && !program.IsGame
-                && !program.DisplayName.IsFalsePositive()
-                && !LocalDatabase.IsGame(program.DisplayName)
-                && !LocalDatabase.IsProgram(program.DisplayName);
+            if (program == null)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(program.DisplayName))
+            {
+                Console.WriteLine($"[Gemini.Filter] Skipping: null DisplayName");
+                return false;
+            }
+
+            if (program.IsGame)
+            {
+                Console.WriteLine($"[Gemini.Filter] Skipping {program.DisplayName}: already marked as game");
+                return false;
+            }
+
+            if (program.DisplayName.IsFalsePositive())
+            {
+                Console.WriteLine($"[Gemini.Filter] Skipping {program.DisplayName}: false positive");
+                return false;
+            }
+
+            if (LocalDatabase.IsGame(program.DisplayName))
+            {
+                Console.WriteLine($"[Gemini.Filter] Skipping {program.DisplayName}: in local game database");
+                return false;
+            }
+
+            if (LocalDatabase.IsProgram(program.DisplayName))
+            {
+                Console.WriteLine($"[Gemini.Filter] Skipping {program.DisplayName}: in local program database");
+                return false;
+            }
+
+            Console.WriteLine($"[Gemini.Filter] Including {program.DisplayName}: eligible for classification");
+            return true;
         }
 
         private static Dictionary<string, string> ClassifyBatch(List<BatchCandidate> batch)
@@ -188,38 +234,69 @@ namespace Fuzion.AI
         private static Dictionary<string, string> ParseClassifications(List<BatchCandidate> batch, string responseContent)
         {
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            JObject outer = JObject.Parse(responseContent);
-            string outputJson = outer["candidates"]?.FirstOrDefault()?["content"]?["parts"]?.FirstOrDefault()?["text"]?.Value<string>();
-            if (string.IsNullOrWhiteSpace(outputJson))
+            
+            try
             {
-                return result;
-            }
-
-            JObject parsed = JObject.Parse(outputJson);
-            JArray games = parsed["games"] as JArray;
-            if (games == null)
-            {
-                return result;
-            }
-
-            foreach (JObject game in games.OfType<JObject>())
-            {
-                int? index = game["index"]?.Value<int>();
-                string detectedName = game["detectedName"]?.Value<string>()?.Trim();
-                string canonicalTitle = game["canonicalTitle"]?.Value<string>()?.Trim();
-
-                if (!index.HasValue || index.Value < 0 || index.Value >= batch.Count)
+                JObject outer = JObject.Parse(responseContent);
+                JArray candidates = outer["candidates"] as JArray;
+                if (candidates == null || candidates.Count == 0)
                 {
-                    continue;
+                    Console.WriteLine("[Gemini] No candidates in response");
+                    return result;
                 }
 
-                string expectedName = batch[index.Value].Program.DisplayName;
-                if (!string.Equals(expectedName, detectedName, StringComparison.OrdinalIgnoreCase))
+                string outputJson = candidates.FirstOrDefault()?["content"]?["parts"]?.FirstOrDefault()?["text"]?.Value<string>();
+                if (string.IsNullOrWhiteSpace(outputJson))
                 {
-                    continue;
+                    Console.WriteLine("[Gemini] No text content in response");
+                    return result;
                 }
 
-                result[expectedName] = string.IsNullOrWhiteSpace(canonicalTitle) ? expectedName : canonicalTitle;
+                Console.WriteLine($"[Gemini] Raw response: {outputJson.Substring(0, Math.Min(200, outputJson.Length))}...");
+
+                JObject parsed = JObject.Parse(outputJson);
+                JArray games = parsed["games"] as JArray;
+                if (games == null)
+                {
+                    Console.WriteLine("[Gemini] No 'games' array in parsed JSON");
+                    return result;
+                }
+
+                Console.WriteLine($"[Gemini] Parsed {games.Count} games from response");
+
+                foreach (JObject game in games.OfType<JObject>())
+                {
+                    int? index = game["index"]?.Value<int>();
+                    string detectedName = game["detectedName"]?.Value<string>()?.Trim();
+                    string canonicalTitle = game["canonicalTitle"]?.Value<string>()?.Trim();
+
+                    if (!index.HasValue)
+                    {
+                        Console.WriteLine($"[Gemini] Skipping: missing index");
+                        continue;
+                    }
+
+                    if (index.Value < 0 || index.Value >= batch.Count)
+                    {
+                        Console.WriteLine($"[Gemini] Skipping: index {index} out of range [0, {batch.Count})");
+                        continue;
+                    }
+
+                    string expectedName = batch[index.Value].Program.DisplayName;
+                    if (!string.Equals(expectedName, detectedName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[Gemini] Skipping: name mismatch. Expected '{expectedName}', got '{detectedName}'");
+                        continue;
+                    }
+
+                    string finalTitle = string.IsNullOrWhiteSpace(canonicalTitle) ? expectedName : canonicalTitle;
+                    result[expectedName] = finalTitle;
+                    Console.WriteLine($"[Gemini] Added: {expectedName} -> {finalTitle}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Gemini] Parse error: {ex.GetType().Name}: {ex.Message}");
             }
 
             return result;
