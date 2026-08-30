@@ -1,0 +1,74 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Fuzion (Debug)",
+      "type": "shell",
+      "command": "$vswhere = Join-Path '${env:ProgramFiles(x86)}' 'Microsoft Visual Studio\\Installer\\vswhere.exe'; $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\\**\\Bin\\MSBuild.exe' | Select-Object -First 1; if (-not $msbuild) { throw 'MSBuild.exe not found. Install Visual Studio 2022 or Build Tools with MSBuild.' }; & $msbuild 'Fuzion Dock.sln' /restore /t:Build /p:Configuration=Debug /p:Platform='Any CPU' /nologo /m",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "pwsh",
+          "args": [
+            "-NoProfile",
+            "-Command"
+          ]
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Build Fuzion (Release)",
+      "type": "shell",
+      "command": "$vswhere = Join-Path '${env:ProgramFiles(x86)}' 'Microsoft Visual Studio\\Installer\\vswhere.exe'; $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\\**\\Bin\\MSBuild.exe' | Select-Object -First 1; if (-not $msbuild) { throw 'MSBuild.exe not found. Install Visual Studio 2022 or Build Tools with MSBuild.' }; & $msbuild 'Fuzion Dock.sln' /restore /t:Build /p:Configuration=Release /p:Platform='Any CPU' /nologo /m",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "pwsh",
+          "args": [
+            "-NoProfile",
+            "-Command"
+          ]
+        }
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Run Fuzion",
+      "type": "shell",
+      "command": "$exe = Join-Path '${workspaceFolder}' 'FuzionDock\\bin\\Debug\\Fuzion.exe'; if (-not (Test-Path $exe)) { throw 'Build output not found. Run the build task first.' }; Start-Process -FilePath $exe",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "pwsh",
+          "args": [
+            "-NoProfile",
+            "-Command"
+          ]
+        }
+      },
+      "dependsOn": "Build Fuzion (Debug)",
+      "problemMatcher": []
+    },
+    {
+      "label": "Stop Fuzion",
+      "type": "shell",
+      "command": "$stopped = $false; Get-Process Fuzion -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force; $stopped = $true }; if ($stopped) { 'Stopped Fuzion' } else { 'Fuzion was not running' }",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "pwsh",
+          "args": [
+            "-NoProfile",
+            "-Command"
+          ]
+        }
+      },
+      "problemMatcher": []
+    }
+  ]
+}

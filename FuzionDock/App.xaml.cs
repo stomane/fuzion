@@ -7,7 +7,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using Fuzion.Programs;
-using Windows.UI.WindowManagement;
 using Fuzion.Icons;
 
 namespace Fuzion

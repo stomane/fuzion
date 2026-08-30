@@ -16,7 +16,6 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Windows.UI.WindowManagement;
 using Newtonsoft.Json;
 using static Fuzion.Icons.BitmapTools;
 using static Fuzion.Icons.IconManager;

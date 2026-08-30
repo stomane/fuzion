@@ -5,8 +5,10 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <RuntimeIdentifiers>win</RuntimeIdentifiers>
     <FrameworkPathOverride Condition="'$(TargetFramework)' == ''">$(USERPROFILE)\.nuget\packages\microsoft.netframework.referenceassemblies.net462\1.0.3\build\.NETFramework\v4.6.2</FrameworkPathOverride>
     <ReferencePath>$(FrameworkPathOverride);$(USERPROFILE)\.nuget\packages\microsoft.netframework.referenceassemblies.net462\1.0.3\build\.NETFramework\v4.6.2\Facades</ReferencePath>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <ProjectGuid>{D6C52589-FBB7-4ED3-B28B-33ABEF7C3CB4}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>Fuzion</RootNamespace>
@@ -162,6 +164,9 @@
     </Reference>
     <Reference Include="System.Runtime.InteropServices">
       <HintPath>$(USERPROFILE)\.nuget\packages\microsoft.netframework.referenceassemblies.net462\1.0.3\build\.NETFramework\v4.6.2\Facades\System.Runtime.InteropServices.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Resources.Extensions">
+      <HintPath>$(USERPROFILE)\.nuget\packages\system.resources.extensions\4.7.1\lib\net461\System.Resources.Extensions.dll</HintPath>
     </Reference>
     
   </ItemGroup>
@@ -339,15 +344,6 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
-    <Content Include="dbPassword.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="IGDBProxyURL.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="GoogleSearchAPIKey.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
     <Resource Include="Assets\onlineIconIcon.png" />
     <Resource Include="Assets\fake_blur.png" />
     <Resource Include="Assets\64x\resetwhite64x.png" />
@@ -560,6 +556,9 @@
     </PackageReference>
     <PackageReference Include="System.Net.Http">
       <Version>4.3.4</Version>
+    </PackageReference>
+    <PackageReference Include="System.Resources.Extensions">
+      <Version>4.7.1</Version>
     </PackageReference>
     <PackageReference Include="NETStandard.Library">
       <Version>2.0.3</Version>

@@ -34,6 +34,34 @@ This project requires some setup that you'll need to figure out by exploring the
 
 Check the code for the specific environment variables and configuration required.
 
+## Running In VS Code
+
+This is a legacy WPF app targeting .NET Framework 4.6.2, so the correct build path in VS Code is MSBuild from Visual Studio or Build Tools, not `dotnet run`.
+
+1. Install the recommended VS Code extension when prompted: `C#`.
+2. Make sure Visual Studio 2022 or Visual Studio Build Tools is installed with MSBuild support.
+3. In VS Code, run the default build task with `Ctrl+Shift+B`.
+4. Press `F5` and choose `Debug Fuzion (.NET Framework)` to build and debug the app.
+5. If you only want to launch without attaching a debugger, run the `Run Fuzion` task from `Tasks: Run Task`.
+6. If the app is still running and a later build says `Fuzion.exe` is locked, run the `Stop Fuzion` task or press `Shift+F5` to stop debugging.
+
+Current task setup resolves `MSBuild.exe` automatically through `vswhere`, so it works across Community, Professional, and Build Tools installs.
+
+`C# Dev Kit` does not support this project format because [FuzionDock/Fuzion.csproj](FuzionDock/Fuzion.csproj) is a traditional non-SDK-style .NET Framework WPF project. Use the standard `C#` extension for this workspace unless you decide to do a full SDK-style project migration.
+
+To reduce language-server restore warnings for native/runtime-specific packages, the project now declares `RuntimeIdentifiers=win`.
+
+The app reads configuration from environment variables now. The main ones currently referenced in code are:
+
+- `GOOGLE_SEARCH_API_KEY`
+- `IGDB_PROXY_URL`
+- `DB_PASSWORD`
+- `REDDIT_CLIENT_ID`
+- `IGDB_CLIENT_ID`
+- `IGDB_CLIENT_SECRET`
+
+Those values are not required for the project to build, but some runtime features will not work without them.
+
 ## License
 
 See [LICENSE](LICENSE) file for details.

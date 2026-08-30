@@ -8,7 +8,6 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
-using Windows.Foundation.Metadata;
 using static Fuzion.MainWindow;
 
 namespace Fuzion.Native
