@@ -274,7 +274,6 @@
     <Compile Include="Update\UpdateMessageWindow.xaml.cs">
       <DependentUpon>UpdateMessageWindow.xaml</DependentUpon>
     </Compile>
-    <Compile Include="WindowsManager\EditGameWindowsManager.cs" />
     <Compile Include="WindowsManager\FuzionToastWindow.xaml.cs">
       <DependentUpon>FuzionToastWindow.xaml</DependentUpon>
     </Compile>

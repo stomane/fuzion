@@ -3088,7 +3088,7 @@ namespace Fuzion
             return new Point(dpiScaleX, dpiScaleY);
         }
 
-        private static Rect GetActiveScreenWorkingAreaDip()
+        internal static Rect GetActiveScreenWorkingAreaDip()
         {
             var workingArea = Position.Monitors.ActiveScreen.WorkingArea;
             PresentationSource source = PresentationSource.FromVisual(AppWindow);

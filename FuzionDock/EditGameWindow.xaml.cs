@@ -125,13 +125,6 @@ namespace Fuzion
         public EditGameWindow()
         {
             InitializeComponent();
-
-            // Arrange windows in grid - unfinished
-            //var windowInitialPosition = WindowsManager.EditGameWindowsManager.GetNextWindowPosition(this);
-
-            //Left = windowInitialPosition.X;
-            //Top = windowInitialPosition.Y;
-
         }
         private void EditGameWindow_Loaded(object sender, RoutedEventArgs e) //Runs once
         {
@@ -529,7 +522,6 @@ namespace Fuzion
 
         private void Window_Closed(object sender, EventArgs e)
         {
-            WindowsManager.EditGameWindowsManager.RemoveWndRef(this);
             OpenWindowsManager.WindowReferenceControl($"{editedGame} Card", this, OpenWindowsManager.R.Remove);
         }
 
