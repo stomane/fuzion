@@ -3112,85 +3112,51 @@ namespace Fuzion
                 AppWindow.UpdateLayout();
             }
 
+            var workingArea = Position.Monitors.ActiveScreen.WorkingArea;
+
             // To-do find a way to stick window to edges properly by using a dynamic value - maybe use updatelayout always before setting (updatelayout is slow as I recall)
             switch (Settings.Default.DockLocation)
             {
                 case 0: //top
-                    if (SystemParameters.VirtualScreenTop < -99)
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Height);
-                    }
-                    else
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top;
-                    }
-                    // Fix for negative values LEFT
-                    if (SystemParameters.VirtualScreenLeft < -99)
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Width);
-                    }
-                    else
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left;
-                    }
+                    AppWindow.MinHeight = 0;
+                    AppWindow.Height = double.NaN;
+                    AppWindow.MaxHeight = double.PositiveInfinity;
 
-                    AppWindow.MinWidth = Position.Monitors.ActiveScreen.WorkingArea.Width;
-                    AppWindow.Width = Position.Monitors.ActiveScreen.WorkingArea.Width;
-                    AppWindow.MaxWidth = Position.Monitors.ActiveScreen.WorkingArea.Width;
+                    AppWindow.Top = workingArea.Top;
+                    AppWindow.Left = workingArea.Left;
+
+                    AppWindow.MinWidth = workingArea.Width;
+                    AppWindow.Width = workingArea.Width;
+                    AppWindow.MaxWidth = workingArea.Width;
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Width / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 1: //bottom
-                    //AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Bottom - Position.Orientation.GetCalculatedWindowHeight();
-                    // Fix for negative values TOP
-                    if (SystemParameters.VirtualScreenTop < -99)
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Bottom - Position.Orientation.GetCalculatedWindowHeight() + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Height);
-                    }
-                    else
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Bottom - Position.Orientation.GetCalculatedWindowHeight();
-                    }
-                    // Fix for negative values LEFT
-                    if (SystemParameters.VirtualScreenLeft < -99)
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Width);
-                    }
-                    else
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left;
-                    }
+                    AppWindow.MinHeight = 0;
+                    AppWindow.Height = double.NaN;
+                    AppWindow.MaxHeight = double.PositiveInfinity;
 
-                    AppWindow.MinWidth = Position.Monitors.ActiveScreen.WorkingArea.Width;
-                    AppWindow.Width = Position.Monitors.ActiveScreen.WorkingArea.Width;
-                    AppWindow.MaxWidth = Position.Monitors.ActiveScreen.WorkingArea.Width;
+                    AppWindow.Top = workingArea.Bottom - Position.Orientation.GetCalculatedWindowHeight();
+                    AppWindow.Left = workingArea.Left;
+
+                    AppWindow.MinWidth = workingArea.Width;
+                    AppWindow.Width = workingArea.Width;
+                    AppWindow.MaxWidth = workingArea.Width;
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Width / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 2: //left
-                    // Fix for negative values TOP
-                    if (SystemParameters.VirtualScreenTop < -99)
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Height);
-                    }
-                    else
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top;
-                    }
+                    AppWindow.MinWidth = 0;
+                    AppWindow.Width = double.NaN;
+                    AppWindow.MaxWidth = double.PositiveInfinity;
+
+                    AppWindow.Top = workingArea.Top;
 
                     if (testNewLeft == -1d)
                     {
-                        // Fix for negative values LEFT
-                        if (SystemParameters.VirtualScreenLeft < -99)
-                        {
-                            AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Width);
-                        }
-                        else
-                        {
-                            AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left;
-                        }
+                        AppWindow.Left = workingArea.Left;
                     }
                     else
                     {
@@ -3208,38 +3174,24 @@ namespace Fuzion
                     //    0,
                     //    SWP_NOSIZE | SWP_NOZORDER);
 
-                    AppWindow.MinHeight = Position.Monitors.ActiveScreen.WorkingArea.Height;
-                    AppWindow.Height = Position.Monitors.ActiveScreen.WorkingArea.Height;
-                    AppWindow.MaxHeight = Position.Monitors.ActiveScreen.WorkingArea.Height;
+                    AppWindow.MinHeight = workingArea.Height;
+                    AppWindow.Height = workingArea.Height;
+                    AppWindow.MaxHeight = workingArea.Height;
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Height / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 3: //right
-                        // Fix for negative values TOP
-                    if (SystemParameters.VirtualScreenTop < -99)
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Height);
-                    }
-                    else
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top;
-                    }
-                    //AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Right - Position.Orientation.GetCalculatedWindowWidth();
-                    // Fix for negative values LEFT
-                    if (SystemParameters.VirtualScreenLeft < -99)
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Right - Position.Orientation.GetCalculatedWindowWidth() + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Width);
-                    }
-                    else
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Right - Position.Orientation.GetCalculatedWindowWidth();
-                    }
+                    AppWindow.MinWidth = 0;
+                    AppWindow.Width = double.NaN;
+                    AppWindow.MaxWidth = double.PositiveInfinity;
 
+                    AppWindow.Top = workingArea.Top;
+                    AppWindow.Left = workingArea.Right - Position.Orientation.GetCalculatedWindowWidth();
 
-                    AppWindow.MinHeight = Position.Monitors.ActiveScreen.WorkingArea.Height;
-                    AppWindow.Height = Position.Monitors.ActiveScreen.WorkingArea.Height;
-                    AppWindow.MaxHeight = Position.Monitors.ActiveScreen.WorkingArea.Height;
+                    AppWindow.MinHeight = workingArea.Height;
+                    AppWindow.Height = workingArea.Height;
+                    AppWindow.MaxHeight = workingArea.Height;
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Height / (Settings.Default.StartupIconSize + 3);
