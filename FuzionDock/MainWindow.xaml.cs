@@ -3088,6 +3088,23 @@ namespace Fuzion
             return new Point(dpiScaleX, dpiScaleY);
         }
 
+        private static Rect GetActiveScreenWorkingAreaDip()
+        {
+            var workingArea = Position.Monitors.ActiveScreen.WorkingArea;
+            PresentationSource source = PresentationSource.FromVisual(AppWindow);
+
+            if (source?.CompositionTarget == null)
+            {
+                return new Rect(workingArea.Left, workingArea.Top, workingArea.Width, workingArea.Height);
+            }
+
+            var transformFromDevice = source.CompositionTarget.TransformFromDevice;
+            Point topLeft = transformFromDevice.Transform(new Point(workingArea.Left, workingArea.Top));
+            Point bottomRight = transformFromDevice.Transform(new Point(workingArea.Right, workingArea.Bottom));
+
+            return new Rect(topLeft, bottomRight);
+        }
+
         private static bool ShouldReserveSearchPanelSpace()
         {
             return IsSearchBoxExpanded || AppWindow.SearchResultsGrid.Children.Count > 0;
@@ -3140,19 +3157,6 @@ namespace Fuzion
 
         public static void CenterWindowOnScreen(string sender = "Not specified", bool updateLayout = true, double testNewLeft = -1d)
         {
-            // SearchGridWidth + ChatGridWidth + LoadingRectangleWidth + ChatGridMargins + GameMargins + GameIconSize
-            // Need to make this dynamically calculate
-            //double vWidth = searchResultsGridMaxWidth + AppWindow.ChatGrid.Width + AppWindow.LoadingRectangle.Width + 16 + 10 + Settings.Default.StartupIconSize;
-            //double hHeight = searchResultRowHeight * 5 + AppWindow.ChatGrid.Height + AppWindow.LoadingRectangle.Height + 8 + 10 + Settings.Default.StartupIconSize;
-            double vWidth = auxGridMaxWidth + Settings.Default.StartupIconSize + 10;
-            double hHeight = auxGridMaxHeight + Settings.Default.StartupIconSize + 10;
-            //Console.WriteLine("vWidth is " + vWidth);
-            //Console.WriteLine("hHeight is " + hHeight);
-            //Console.WriteLine("Current win height is " + AppWindow.Height);
-            //Console.WriteLine("Current win actual height is " + AppWindow.ActualHeight);
-            //Console.WriteLine("Current win width is " + AppWindow.Width);
-            //Console.WriteLine("Current win actual width is " + AppWindow.ActualWidth);
-
             Console.WriteLine($"<<< Center Window On Screen src: {sender} >>>");
 
             if (updateLayout)
@@ -3160,7 +3164,9 @@ namespace Fuzion
                 AppWindow.UpdateLayout();
             }
 
-            var workingArea = Position.Monitors.ActiveScreen.WorkingArea;
+            UpdateSearchPanelReservation();
+            Rect workingArea = GetActiveScreenWorkingAreaDip();
+            AppWindow.WindowState = WindowState.Normal;
 
             // To-do find a way to stick window to edges properly by using a dynamic value - maybe use updatelayout always before setting (updatelayout is slow as I recall)
             switch (Settings.Default.DockLocation)
@@ -3176,6 +3182,7 @@ namespace Fuzion
                     AppWindow.MinWidth = workingArea.Width;
                     AppWindow.Width = workingArea.Width;
                     AppWindow.MaxWidth = workingArea.Width;
+                    AppWindow.UpdateLayout();
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Width / (Settings.Default.StartupIconSize + 3);
@@ -3202,6 +3209,11 @@ namespace Fuzion
                     AppWindow.Width = double.NaN;
                     AppWindow.MaxWidth = double.PositiveInfinity;
 
+                    AppWindow.MinHeight = workingArea.Height;
+                    AppWindow.Height = workingArea.Height;
+                    AppWindow.MaxHeight = workingArea.Height;
+                    AppWindow.UpdateLayout();
+
                     AppWindow.Top = workingArea.Top;
 
                     if (testNewLeft == -1d)
@@ -3212,21 +3224,6 @@ namespace Fuzion
                     {
                         AppWindow.Left = testNewLeft;
                     }
-                    //AppWindow.Left = newLeft;
-
-                    //// Using SetWindowPos pinvoke
-                    //Console.WriteLine("Reported Left: "+Position.Monitors.ActiveScreen.WorkingArea.Left);
-                    //Console.WriteLine("Reported Location: "+Position.Monitors.ActiveScreen.WorkingArea.Location);
-                    //_ = SetWindowPosNative(AppWindow, IntPtr.Zero,
-                    //    Position.Monitors.ActiveScreen.WorkingArea.Left,
-                    //    Position.Monitors.ActiveScreen.WorkingArea.Top,
-                    //    0,
-                    //    0,
-                    //    SWP_NOSIZE | SWP_NOZORDER);
-
-                    AppWindow.MinHeight = workingArea.Height;
-                    AppWindow.Height = workingArea.Height;
-                    AppWindow.MaxHeight = workingArea.Height;
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Height / (Settings.Default.StartupIconSize + 3);
@@ -3236,13 +3233,12 @@ namespace Fuzion
                     AppWindow.Width = double.NaN;
                     AppWindow.MaxWidth = double.PositiveInfinity;
 
-                    AppWindow.Top = workingArea.Top;
-
                     AppWindow.MinHeight = workingArea.Height;
                     AppWindow.Height = workingArea.Height;
                     AppWindow.MaxHeight = workingArea.Height;
 
                     AppWindow.UpdateLayout();
+                    AppWindow.Top = workingArea.Top;
                     AppWindow.Left = workingArea.Right - GetMeasuredWindowWidth();
 
                     // Recalculate ScrollVisibleIconCount
@@ -4199,7 +4195,7 @@ namespace Fuzion
                 {
                     if (Settings.Default.BackgroundEdgeToEdge)
                     {
-                        AppWindow.DockBackgroundBorder.Width = Position.Monitors.ActiveScreen.WorkingArea.Width;
+                        AppWindow.DockBackgroundBorder.Width = GetActiveScreenWorkingAreaDip().Width;
                     }
                     else
                     {
