@@ -62,6 +62,16 @@ The app reads configuration from environment variables now. The main ones curren
 
 Those values are not required for the project to build, but some runtime features will not work without them.
 
+For local development, Fuzion now also supports an ignored file at [FuzionDock/local.secrets.example.json](FuzionDock/local.secrets.example.json): create `FuzionDock/local.secrets.json` next to the project file and the build will copy it to the output directory automatically. Environment variables still take precedence over the local file.
+
+The current app uses:
+
+- `GoogleSearchApiKey` for online icon and executable lookup
+- `IgdbProxyUrl` for IGDB-backed game detection
+- `DbPassword` for the legacy remote database path
+
+The current codebase does not consume a Steam API key directly; Steam store search uses the `SteamStoreQuery` package without a project-specific local key.
+
 If the API keys are missing, Fuzion now starts in a plain offline mode: local launcher detection and local icons still work, while Google image search and IGDB lookups are skipped.
 
 ## License

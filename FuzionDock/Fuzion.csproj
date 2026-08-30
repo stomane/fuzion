@@ -345,6 +345,10 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Content Include="local.secrets.json" Condition="Exists('local.secrets.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Include="local.secrets.example.json" />
     <Resource Include="Assets\onlineIconIcon.png" />
     <Resource Include="Assets\fake_blur.png" />
     <Resource Include="Assets\64x\resetwhite64x.png" />
