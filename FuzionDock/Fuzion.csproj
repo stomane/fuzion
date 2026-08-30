@@ -184,6 +184,7 @@
     </Compile>
     <Compile Include="Debug\CatchUnhandledExceptions.cs" />
     <Compile Include="Debug\DebugConsole.cs" />
+    <Compile Include="Debug\DebugFileLog.cs" />
     <Compile Include="Dock\GridLengthAnimation.cs" />
     <Compile Include="Dock\Modify.cs" />
     <Compile Include="Dock\Scrolling.cs" />

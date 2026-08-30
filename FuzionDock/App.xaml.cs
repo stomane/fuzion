@@ -22,6 +22,9 @@ namespace Fuzion
         [STAThread]
         public static void Main()
         {
+#if DEBUG
+            Debug.DebugFileLog.Initialize();
+#endif
             if (SingleInstance<App>.InitializeAsFirstInstance(Unique))
             {
                 var application = new App();

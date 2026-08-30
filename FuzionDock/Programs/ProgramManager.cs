@@ -85,9 +85,9 @@ namespace Fuzion.Programs
                     //Application.Current.Dispatcher.Invoke(() => { g = this.ToGame(); });
 
                     //RecentlyAddedGames.Add(g);
-                    //Console.WriteLine("Added URI DBREADY: " + g.IconURI);
+                    //System.Diagnostics.Debug.WriteLine("Added URI DBREADY: " + g.IconURI);
                     DatabaseReady = true;
-                    Console.WriteLine("DB ready toggle from Icon Fetch");
+                    System.Diagnostics.Debug.WriteLine("DB ready toggle from Icon Fetch");
                 }
             }
         }
@@ -105,9 +105,9 @@ namespace Fuzion.Programs
                     //Game g = null;
                     //Application.Current.Dispatcher.Invoke(() => { g = this.ToGame(); });
                     //RecentlyAddedGames.Add(g);
-                    //Console.WriteLine("Added URI DBREADY: "+g.IconURI);
+                    //System.Diagnostics.Debug.WriteLine("Added URI DBREADY: "+g.IconURI);
                     DatabaseReady = true;
-                    Console.WriteLine("DB ready toggle from Exe Fetch");
+                    System.Diagnostics.Debug.WriteLine("DB ready toggle from Exe Fetch");
                 }
             }
         }
@@ -185,7 +185,7 @@ namespace Fuzion.Programs
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Failed to update program icon link: " + ex.Message);
+                System.Diagnostics.Debug.WriteLine("Failed to update program icon link: " + ex.Message);
             }
         }
     }
@@ -227,7 +227,7 @@ namespace Fuzion.Programs
 
                 //if (_databaseReady == true)
                 //{
-                //    Console.WriteLine(DisplayName + " is db ready!");
+                //    System.Diagnostics.Debug.WriteLine(DisplayName + " is db ready!");
                 //}
             }
         }
@@ -279,7 +279,7 @@ namespace Fuzion.Programs
             // scroll one game distance to left/top because we'll hit grid edge
             if (IsHittingRightBottomEdgeOnRemove)
             {
-                Console.WriteLine("Hitting Grid Edge, scrolling");
+                System.Diagnostics.Debug.WriteLine("Hitting Grid Edge, scrolling");
                 // Need to override scroll speed to make it happen within GridAnimationLength (200ms)
                 // using a timed lerp
                 Dock.Scrolling.IsRemovingGame = true;
@@ -290,7 +290,7 @@ namespace Fuzion.Programs
             //// scroll one game distance to right/bottom because we'll hit grid edge
             //if (IsHittingLeftTopEdgeOnRemove)
             //{
-            //    Console.WriteLine("Hitting Grid Edge, scrolling");
+            //    System.Diagnostics.Debug.WriteLine("Hitting Grid Edge, scrolling");
             //    // Need to override scroll speed to make it happen within GridAnimationLength (200ms)
             //    // using a timed lerp
             //    Dock.Scrolling.IsRemovingGame = true;
@@ -364,7 +364,7 @@ namespace Fuzion.Programs
 
             if (prog != null && prog.IsGame)
             {
-                Console.WriteLine("Removed from program list: " + prog.DisplayName + " with GUID " + prog.IconGUID);
+                System.Diagnostics.Debug.WriteLine("Removed from program list: " + prog.DisplayName + " with GUID " + prog.IconGUID);
                 ProgramObjects.Remove(prog);
             }
 
@@ -439,7 +439,7 @@ namespace Fuzion.Programs
 
                 if (RecentlyAddedGameNames.Count == 0)
                 {
-                    Console.WriteLine("Parallel foreach exited with no new games, stopping db push listener");
+                    System.Diagnostics.Debug.WriteLine("Parallel foreach exited with no new games, stopping db push listener");
                     StopAnimatingLoadingRectangle();
                     CheckGameObjectDBReadyness = false;
                 }
@@ -456,18 +456,18 @@ namespace Fuzion.Programs
         {
             if (program == null || string.IsNullOrWhiteSpace(program.DisplayName))
             {
-                Console.WriteLine("[ProgramToGrid] Skipping: null program or DisplayName");
+                System.Diagnostics.Debug.WriteLine("[ProgramToGrid] Skipping: null program or DisplayName");
                 return;
             }
 
-            Console.WriteLine($"[ProgramToGrid] Processing: {program.DisplayName}");
+            System.Diagnostics.Debug.WriteLine($"[ProgramToGrid] Processing: {program.DisplayName}");
             AnimateLoadingRectangle(true, "ptg" + program.IconGUID);
             if (GameCheck.IsGame(program))
             {
-                Console.WriteLine($"[ProgramToGrid] {program.DisplayName}: GAME detected");
+                System.Diagnostics.Debug.WriteLine($"[ProgramToGrid] {program.DisplayName}: GAME detected");
                 // Add the name to the new games list to check for db readyness before the fetchicon and fetchexe occur
                 RecentlyAddedGameNames.Add(program.DisplayName);
-                Console.WriteLine($"[ProgramToGrid] {program.DisplayName}: added to recently added games list");
+                System.Diagnostics.Debug.WriteLine($"[ProgramToGrid] {program.DisplayName}: added to recently added games list");
 
                 // Make sure we run this last as it will update links
                 // in GameObjects and RecentlyAddedGames lisits
@@ -503,7 +503,7 @@ namespace Fuzion.Programs
             }
             else
             {
-                Console.WriteLine($"[ProgramToGrid] {program.DisplayName}: NOT a game");
+                System.Diagnostics.Debug.WriteLine($"[ProgramToGrid] {program.DisplayName}: NOT a game");
             }
 
             AnimateLoadingRectangle(false, "ptg" + program.IconGUID);

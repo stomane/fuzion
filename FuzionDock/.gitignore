@@ -11,8 +11,8 @@
 *.sln.docstates
 
 # Build results
-[Dd]ebug/
-[Dd]ebugPublic/
+# (Debug/DebugPublic dropped: bin/ and obj/ above already cover all build output,
+# and an unqualified "Debug/" pattern was silently excluding the real FuzionDock/Debug/ source folder)
 [Rr]elease/
 [Rr]eleases/
 x64/

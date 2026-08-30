@@ -48,7 +48,7 @@ namespace Fuzion
         public static bool HasGoogleSearchApiKey => !string.IsNullOrWhiteSpace(gSearchApiKey);
         public static bool HasIgdbProxyUrl => !string.IsNullOrWhiteSpace(igdbProxyURL);
         public static bool HasGeminiApiKey => !string.IsNullOrWhiteSpace(geminiApiKey);
-        public static string GeminiModel => string.IsNullOrWhiteSpace(geminiModel) ? "gemini-2.5-flash" : geminiModel.Trim();
+        public static string GeminiModel => string.IsNullOrWhiteSpace(geminiModel) ? "gemini-3.6-flash" : geminiModel.Trim();
         public static bool IsOfflineMode => !HasGoogleSearchApiKey && !HasIgdbProxyUrl && !HasGeminiApiKey;
 
         private static LocalSecrets LoadLocalSecrets()

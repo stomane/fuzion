@@ -174,45 +174,40 @@ namespace Fuzion.LauncherSpecific
 
                         try
                         {
-                            StreamReader objReader = new StreamReader(file);
-
-                            string streamLine = "";
-                            int i = 0;
-
-                            while (streamLine != null)
+                            using (StreamReader objReader = new StreamReader(file))
                             {
-                                i++;
-                                streamLine = objReader.ReadLine();
+                                string streamLine;
 
-                                if (streamLine != null && streamLine.Contains("name"))
+                                while ((streamLine = objReader.ReadLine()) != null)
                                 {
-                                    MatchCollection matchCollection = Regex.Matches(streamLine, "\"([^\"]*)\"");
-                                    string gameName = matchCollection[1].Value.Trim('"');
-
-                                    if (!steamToolsKeywords.Contains(gameName.ToLowerInvariant()))
+                                    if (streamLine.Contains("name"))
                                     {
-                                        Console.WriteLine("Steam program found: " + gameName + " with APP ID: " + appID);
-                                        Program steamGame = new Program()
-                                        {
-                                            DisplayName = gameName,
-                                            Path = @"steam://rungameid/" + appID,
-                                            OriginalPath = @"steam://rungameid/" + appID,
-                                            SteamAppID = appID,
-                                            Launcher = BelongsToLauncher.Steam,
-                                            OriginalLauncher = BelongsToLauncher.Steam,
-                                            PathType = PathType.URI,
-                                            OriginalPathType = PathType.URI
-                                        };
+                                        MatchCollection matchCollection = Regex.Matches(streamLine, "\"([^\"]*)\"");
+                                        string gameName = matchCollection[1].Value.Trim('"');
 
-                                        if (!result.Contains(steamGame))
+                                        if (!steamToolsKeywords.Contains(gameName.ToLowerInvariant()))
                                         {
-                                            result.Add(steamGame);
+                                            Console.WriteLine("Steam program found: " + gameName + " with APP ID: " + appID);
+                                            Program steamGame = new Program()
+                                            {
+                                                DisplayName = gameName,
+                                                Path = @"steam://rungameid/" + appID,
+                                                OriginalPath = @"steam://rungameid/" + appID,
+                                                SteamAppID = appID,
+                                                Launcher = BelongsToLauncher.Steam,
+                                                OriginalLauncher = BelongsToLauncher.Steam,
+                                                PathType = PathType.URI,
+                                                OriginalPathType = PathType.URI
+                                            };
+
+                                            if (!result.Contains(steamGame))
+                                            {
+                                                result.Add(steamGame);
+                                            }
                                         }
                                     }
                                 }
                             }
-                            Console.ReadLine();
-                            objReader.Close();
                         }
                         catch (IOException)
                         {
@@ -226,11 +221,28 @@ namespace Fuzion.LauncherSpecific
             return result;
         }
 
+        // Steam's app manifest names often differ from the registry's Add/Remove Programs name
+        // by trademark/copyright symbols (e.g. "Need for Speed™ Unbound" vs "Need for Speed
+        // Unbound"), so an exact match would treat the same install as two separate programs.
+        private static bool NamesMatch(string a, string b)
+        {
+            // ToLowerNormalized replaces symbols like (tm) with a space but doesn't collapse
+            // the result, so "Need for Speed(tm) Unbound" -> "need for speed  unbound" (double
+            // space) would never equal "Need for Speed Unbound" -> "need for speed unbound"
+            // without also collapsing whitespace here.
+            return string.Equals(CollapseWhitespace(a?.ToLowerNormalized()), CollapseWhitespace(b?.ToLowerNormalized()), StringComparison.Ordinal);
+        }
+
+        private static string CollapseWhitespace(string s)
+        {
+            return s == null ? null : Regex.Replace(s, @"\s+", " ").Trim();
+        }
+
         public static void SteamUpdateProgramObjects(List<Program> steamGamesList, List<Program> listToUpdate)
         {
 
-            List<Program> existingSteamPrograms = steamGamesList.Where(g => listToUpdate.Any(p => p.DisplayName == g.DisplayName)).ToList();
-            List<Program> missingSteamPrograms = steamGamesList.Where(g => !listToUpdate.Any(p => p.DisplayName == g.DisplayName)).ToList();
+            List<Program> existingSteamPrograms = steamGamesList.Where(g => listToUpdate.Any(p => NamesMatch(p.DisplayName, g.DisplayName))).ToList();
+            List<Program> missingSteamPrograms = steamGamesList.Where(g => !listToUpdate.Any(p => NamesMatch(p.DisplayName, g.DisplayName))).ToList();
 
             if(existingSteamPrograms.Count > 0)
             {
@@ -241,7 +253,7 @@ namespace Fuzion.LauncherSpecific
                     // Try catch block as .First might not be found, although I have a check whether it's in the list beforehand
                     try
                     {
-                        int i = listToUpdate.IndexOf(listToUpdate.First(p => p.DisplayName == item.DisplayName));
+                        int i = listToUpdate.IndexOf(listToUpdate.First(p => NamesMatch(p.DisplayName, item.DisplayName)));
 
                         listToUpdate[i].SteamAppID = item.SteamAppID;
                         listToUpdate[i].Path = item.Path;
