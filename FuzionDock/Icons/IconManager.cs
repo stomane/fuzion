@@ -147,8 +147,6 @@ namespace Fuzion.Icons
         //    return images;
         //}
 
-        const string searchKey = @"AIzaSyB_V-l0yKN2HG3mhikQ2DuneM-_Eyytl0Y&cx=000263627932393870992:eb2wx6_f_4y";
-
         private class ImageSearchResult
         {
             public LinkItem[] items { get; set; }
