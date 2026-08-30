@@ -28,6 +28,11 @@ namespace Fuzion.Scanner
         //private static bool addActive = false;
         //public static bool scanning;
 
+        // Guards the whole rescan pipeline (registry scan + Gemini/IGDB classification + grid
+        // update), unlike Scan.ScanInProgress which DeepScan clears as soon as its own
+        // registry-scan phase finishes - long before classification is done.
+        private static bool rescanPipelineActive = false;
+
         private static int index = 0;
 
         //private static DispatcherTimer AnimatedAddDispatcherInit()
@@ -76,10 +81,20 @@ namespace Fuzion.Scanner
             }
         }
 
-        // need to double check if scanning bool is set properly
         public static async void UpdatePrograms()
         {
-            if (!ScanInProgress)
+            // Blocks a second rescan from starting while classification (Gemini/IGDB) is
+            // still running - Scan.ScanInProgress alone isn't enough since DeepScan clears
+            // it right after the registry-scan phase, before classification even starts.
+            if (rescanPipelineActive)
+            {
+                return;
+            }
+
+            rescanPipelineActive = true;
+            AnimateLoadingRectangle(true, "rescan-pipeline");
+
+            try
             {
                 await Task.Run(() => DeepScan(ScanType.Rescan)).ConfigureAwait(false);
 
@@ -95,6 +110,17 @@ namespace Fuzion.Scanner
                 ProgramObjects = updatedProgramList.ToList();
 
                 UpdateSettings();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Rescan.UpdatePrograms failed: {ex}");
+                StopAnimatingLoadingRectangle();
+                ScanInProgress = false;
+            }
+            finally
+            {
+                AnimateLoadingRectangle(false, "rescan-pipeline");
+                rescanPipelineActive = false;
             }
         }
 

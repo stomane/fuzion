@@ -39,147 +39,158 @@ namespace Fuzion.Scanner
                 RecentlyAddedGames.Clear();
 
                 ScanInProgress = true;
+                bool loaderStarted = false;
+                string loaderId = scanType == ScanType.Rescan ? "rescan" : "deepscan";
 
-                if (scanType == ScanType.Normal)
+                try
                 {
-                    // Animate rectangle
-                    AnimateLoadingRectangle(true, "deepscan");
-
-                    // Registry
-                    ProgramObjects = GetRegistryGames();
-
-                    // Steam
-                    if (Steam.Exists)
+                    if (scanType == ScanType.Normal)
                     {
-                        List<Program> steamGames = Steam.GetSteamGames();
-                        Steam.SteamUpdateProgramObjects(steamGames, ProgramObjects);
-                    }
+                        // Animate rectangle
+                        AnimateLoadingRectangle(true, loaderId);
+                        loaderStarted = true;
 
-                    // Epic
-                    if (EpicGames.Exists)
-                    {
-                        List<Program> epicGames = EpicGames.GetEpicGames();
-                        EpicGames.EpicUpdateProgramObjects(epicGames, ProgramObjects);
-                    }
+                        // Registry
+                        ProgramObjects = GetRegistryGames();
 
-                    // Battle.net
-                    if (BattleNet.Exists)
-                    {
-                        BattleNet.BattleNetUpdateProgramObjects(ProgramObjects);
-                    }
-
-                    // Uplay
-                    if (Uplay.Exists)
-                    {
-                        List<Program> uplayGames = Uplay.GetUplayGames();
-                        Uplay.UplayUpdateProgramObjects(uplayGames, ProgramObjects);
-                    }
-
-                    // UWP
-                    List<Program> uwpGames = UWP.GetUWPGames();
-                    UWP.UWPUpdateProgramObjects(uwpGames, ProgramObjects);
-
-                    // Update Dock Name if it's empty
-                    foreach (Program p in ProgramObjects)
-                    {
-                        if (p.DockName.Length == 0)
-                            p.DockName = p.DisplayName;
-                    }
-
-                    // Update Originals before any changes are saved
-                    UpdateProgramListOriginals(ProgramObjects);
-
-                    // Remove Blacklisted programs/games from the list so they don't get added
-                    RemoveBlacklistedPrograms(updatedProgramList);
-
-                    // Sort and add to grid
-                    SortGamesFromProgramsAndAddToGrid(ProgramObjects);
-
-                    //// Local DB Update is after ^ all game operations - moved to AnimateLoadingRectangle
-                    //LocalDatabase.UpdateDatabaseProgramsAsync();
-
-                    UpdateSettings();
-
-                    // Set scan finished in AnimateLoadingRectangle
-
-                    // Stop animating rectangle
-                    AnimateLoadingRectangle(false, "deepscan");
-
-                }
-
-                // Animate only if user issued
-                if (scanType == ScanType.Rescan)
-                {
-                    AnimateLoadingRectangle(true, "rescan");
-
-                    // Registry
-                    updatedProgramList = GetRegistryGames();
-
-                    // Steam
-                    if (Steam.Exists)
-                    {
-                        List<Program> steamGames = Steam.GetSteamGames();
-                        Steam.SteamUpdateProgramObjects(steamGames, updatedProgramList);
-                    }
-
-                    // Epic
-                    if (EpicGames.Exists)
-                    {
-                        List<Program> epicGames = EpicGames.GetEpicGames();
-                        EpicGames.EpicUpdateProgramObjects(epicGames, updatedProgramList);
-                    }
-
-                    // Battle.net
-                    if (BattleNet.Exists)
-                    {
-                        BattleNet.BattleNetUpdateProgramObjects(updatedProgramList);
-                    }
-
-                    // Uplay
-                    if (Uplay.Exists)
-                    {
-                        List<Program> uplayGames = Uplay.GetUplayGames();
-                        Uplay.UplayUpdateProgramObjects(uplayGames, updatedProgramList);
-                    }
-
-                    // UWP
-                    List<Program> uwpGames = UWP.GetUWPGames();
-                    UWP.UWPUpdateProgramObjects(uwpGames, updatedProgramList);
-
-                    // Update Dock Name if it's empty
-                    foreach (Program p in ProgramObjects)
-                    {
-                        if (p.DockName.Length == 0)
-                            p.DockName = p.DisplayName;
-                    }
-
-                    // Update Originals before any changes are saved
-                    UpdateProgramListOriginals(updatedProgramList);
-
-                    // Remove Blacklisted programs/games from the list so they don't get added
-                    //if (!fullRescan) // now always removed because blacklist is user controlled from Settings
-                    RemoveBlacklistedPrograms(updatedProgramList);
-
-                    // Transfer IsGame from original programList, this will not work well with older version
-
-                    for (int i = 0; i < updatedProgramList.Count; i++)
-                    {
-                        Program prog = ProgramObjects.FirstOrDefault(p => p.DisplayName == updatedProgramList[i].DisplayName);
-
-                        if(prog != null)
+                        // Steam
+                        if (Steam.Exists)
                         {
-                            updatedProgramList[i].IsGame = prog.IsGame;
+                            List<Program> steamGames = Steam.GetSteamGames();
+                            Steam.SteamUpdateProgramObjects(steamGames, ProgramObjects);
                         }
+
+                        // Epic
+                        if (EpicGames.Exists)
+                        {
+                            List<Program> epicGames = EpicGames.GetEpicGames();
+                            EpicGames.EpicUpdateProgramObjects(epicGames, ProgramObjects);
+                        }
+
+                        // Battle.net
+                        if (BattleNet.Exists)
+                        {
+                            BattleNet.BattleNetUpdateProgramObjects(ProgramObjects);
+                        }
+
+                        // Uplay
+                        if (Uplay.Exists)
+                        {
+                            List<Program> uplayGames = Uplay.GetUplayGames();
+                            Uplay.UplayUpdateProgramObjects(uplayGames, ProgramObjects);
+                        }
+
+                        // UWP
+                        List<Program> uwpGames = UWP.GetUWPGames();
+                        UWP.UWPUpdateProgramObjects(uwpGames, ProgramObjects);
+
+                        // Update Dock Name if it's empty
+                        foreach (Program p in ProgramObjects)
+                        {
+                            if (p.DockName.Length == 0)
+                                p.DockName = p.DisplayName;
+                        }
+
+                        // Update Originals before any changes are saved
+                        UpdateProgramListOriginals(ProgramObjects);
+
+                        // Remove Blacklisted programs/games from the list so they don't get added
+                        RemoveBlacklistedPrograms(updatedProgramList);
+
+                        // Sort and add to grid
+                        SortGamesFromProgramsAndAddToGrid(ProgramObjects);
+
+                        //// Local DB Update is after ^ all game operations - moved to AnimateLoadingRectangle
+                        //LocalDatabase.UpdateDatabaseProgramsAsync();
+
+                        UpdateSettings();
                     }
 
-                    Console.WriteLine("RESCAN FINISHED");
+                    // Animate only if user issued
+                    if (scanType == ScanType.Rescan)
+                    {
+                        AnimateLoadingRectangle(true, loaderId);
+                        loaderStarted = true;
 
-                    AnimateLoadingRectangle(false, "rescan");
+                        // Registry
+                        updatedProgramList = GetRegistryGames();
+
+                        // Steam
+                        if (Steam.Exists)
+                        {
+                            List<Program> steamGames = Steam.GetSteamGames();
+                            Steam.SteamUpdateProgramObjects(steamGames, updatedProgramList);
+                        }
+
+                        // Epic
+                        if (EpicGames.Exists)
+                        {
+                            List<Program> epicGames = EpicGames.GetEpicGames();
+                            EpicGames.EpicUpdateProgramObjects(epicGames, updatedProgramList);
+                        }
+
+                        // Battle.net
+                        if (BattleNet.Exists)
+                        {
+                            BattleNet.BattleNetUpdateProgramObjects(updatedProgramList);
+                        }
+
+                        // Uplay
+                        if (Uplay.Exists)
+                        {
+                            List<Program> uplayGames = Uplay.GetUplayGames();
+                            Uplay.UplayUpdateProgramObjects(uplayGames, updatedProgramList);
+                        }
+
+                        // UWP
+                        List<Program> uwpGames = UWP.GetUWPGames();
+                        UWP.UWPUpdateProgramObjects(uwpGames, updatedProgramList);
+
+                        // Update Dock Name if it's empty
+                        foreach (Program p in updatedProgramList)
+                        {
+                            if (p.DockName.Length == 0)
+                                p.DockName = p.DisplayName;
+                        }
+
+                        // Update Originals before any changes are saved
+                        UpdateProgramListOriginals(updatedProgramList);
+
+                        // Remove Blacklisted programs/games from the list so they don't get added
+                        //if (!fullRescan) // now always removed because blacklist is user controlled from Settings
+                        RemoveBlacklistedPrograms(updatedProgramList);
+
+                        // Transfer IsGame from original programList, this will not work well with older version
+
+                        for (int i = 0; i < updatedProgramList.Count; i++)
+                        {
+                            Program prog = ProgramObjects.FirstOrDefault(p => p.DisplayName == updatedProgramList[i].DisplayName);
+
+                            if(prog != null)
+                            {
+                                updatedProgramList[i].IsGame = prog.IsGame;
+                            }
+                        }
+
+                        Console.WriteLine("RESCAN FINISHED");
+                    }
                 }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"DeepScan failed during {scanType}: {ex}");
+                    throw;
+                }
+                finally
+                {
+                    if (loaderStarted)
+                    {
+                        AnimateLoadingRectangle(false, loaderId);
+                    }
 
-                // Set scan finished
-                ScanInProgress = false;
-                CheckGameObjectDBReadyness = true;
+                    // Set scan finished even when launcher-specific scan code throws.
+                    ScanInProgress = false;
+                    CheckGameObjectDBReadyness = loaderTaskIDs.Count == 0;
+                }
             }
         }
 

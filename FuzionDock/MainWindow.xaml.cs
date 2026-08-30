@@ -30,7 +30,6 @@ using static Fuzion.Native.IdleHook.HookManager;
 using SteamStoreQuery;
 using System.Security.Policy;
 using System.Net;
-using Windows.UI.Popups;
 using Fuzion.Gamepad;
 using Fuzion.SettingsManager;
 using Fuzion.Icons;
@@ -38,7 +37,6 @@ using SharpDX.Win32;
 using System.Windows.Threading;
 using Fuzion.Analytics;
 using Fuzion.Update;
-using Windows.ApplicationModel.Core;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Controls.Primitives;
@@ -300,6 +298,7 @@ namespace Fuzion
             InitEvents();
             InitSettings();
             CheckForSettings();
+            EnsureVisibleAfterStartup();
             AddSearchKeyPressEvents();
             _ = Task.Run(() => SquirrelUpdate.Update());
             _ = Task.Run(() => SettingsWindow.GetDynamicImages());
@@ -312,7 +311,10 @@ namespace Fuzion
         {
             SetMainScreenRelativeWidthHeight();
             CreateDirectories();
-            HideFromTaskSwitcher();
+            if (ShouldUseLegacyDesktopDocking())
+            {
+                HideFromTaskSwitcher();
+            }
             SetupMinimizePreventionHook();
             //Dock.Scrolling.EnableSmoothScrolling();
             ScrollTimer.Start();
@@ -617,26 +619,26 @@ namespace Fuzion
                 //Check if settings exist
                 if (File.Exists(Fuzion.MainWindow.DefaultAssetPath + @"programs\programs.xml")
                 && File.Exists(Fuzion.MainWindow.DefaultAssetPath + @"programs\games.xml"))
-            {
-                Console.WriteLine("Files exist, loading...");
-                Load();
-            }
-            else
-            {
-                //Create or Scan
-                if (HasNetworkConnection("https://igdb.com"))
                 {
-                    Console.WriteLine("Creating grid for deepscan");
-                    CreateGrid();
-                    _ = Task.Run(() => DeepScan());
+                    Console.WriteLine("Files exist, loading...");
+                    Load();
                 }
                 else
                 {
-                    //No internet or can't reach IGDB UI icon here
-                    OpenWindow.Notification("Could not perform initial scan. Can't reach IGDB, or not connected to the internet. Add games manually or rescan later.", Properties.Resources.NoInternet);
+                    Console.WriteLine("No saved dock data found. Creating grid for initial scan.");
                     CreateGrid();
+
+                    if (Constants.HasIgdbProxyUrl && HasNetworkConnection("https://igdb.com"))
+                    {
+                        Console.WriteLine("Starting initial scan with online metadata.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Starting initial scan in offline mode.");
+                    }
+
+                    _ = Task.Run(() => DeepScan());
                 }
-            }
 
             }
             // Handle exception on startup
@@ -653,6 +655,33 @@ namespace Fuzion
             }
 
             TestArea();
+        }
+
+        // Fall back to a normal top-level window when desktop docking leaves the window hidden.
+        private void EnsureVisibleAfterStartup()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (Handle == IntPtr.Zero || Native.NativeMethods.IsWindowVisible(Handle))
+                {
+                    return;
+                }
+
+                Console.WriteLine("Main dock window is hidden after startup. Falling back to a visible top-level window.");
+
+                if (Settings.Default.StickToDesktop)
+                {
+                    SetOnDesktop(this, false);
+                }
+
+                WindowState = WindowState.Normal;
+                Visibility = Visibility.Visible;
+                Show();
+                Topmost = true;
+                Topmost = false;
+                CenterWindowOnScreen(System.Reflection.MethodBase.GetCurrentMethod().Name);
+                Activate();
+            }), DispatcherPriority.ContextIdle);
         }
 
 
@@ -771,8 +800,16 @@ namespace Fuzion
 
             if (Settings.Default.StickToDesktop)
             {
-                //ActivateStickToDesktop(); //old method
-                SetOnDesktop(this, true);
+                if (ShouldUseLegacyDesktopDocking())
+                {
+                    //ActivateStickToDesktop(); //old method
+                    SetOnDesktop(this, true);
+                }
+                else
+                {
+                    Console.WriteLine("Skipping legacy desktop docking on this Windows build. Showing a normal dock window instead.");
+                    ShowInTaskbar = true;
+                }
             }
 
             // Shadow Launch
@@ -831,6 +868,11 @@ namespace Fuzion
         private static void CreateTaskbarIcon()
         {
             _ = new Icons.TrayIcon();
+        }
+
+        private static bool ShouldUseLegacyDesktopDocking()
+        {
+            return Settings.Default.StickToDesktop && Native.NativeMethods.SupportsLegacyDesktopDocking();
         }
 
         #region Chat Apps
@@ -1135,7 +1177,7 @@ namespace Fuzion
             }
             catch (Exception)
             {
-                OpenWindow.Notification("Something went wrong...", Properties.Resources.UnsupportedFormatMessage);
+                OpenWindow.Notification("Something went wrong...", UiText.UnsupportedFormatMessage);
             }
         }
 
@@ -3046,23 +3088,75 @@ namespace Fuzion
             return new Point(dpiScaleX, dpiScaleY);
         }
 
+        internal static Rect GetActiveScreenWorkingAreaDip()
+        {
+            var workingArea = Position.Monitors.ActiveScreen.WorkingArea;
+            PresentationSource source = PresentationSource.FromVisual(AppWindow);
+
+            if (source?.CompositionTarget == null)
+            {
+                return new Rect(workingArea.Left, workingArea.Top, workingArea.Width, workingArea.Height);
+            }
+
+            var transformFromDevice = source.CompositionTarget.TransformFromDevice;
+            Point topLeft = transformFromDevice.Transform(new Point(workingArea.Left, workingArea.Top));
+            Point bottomRight = transformFromDevice.Transform(new Point(workingArea.Right, workingArea.Bottom));
+
+            return new Rect(topLeft, bottomRight);
+        }
+
+        private static bool ShouldReserveSearchPanelSpace()
+        {
+            return IsSearchBoxExpanded || AppWindow.SearchResultsGrid.Children.Count > 0;
+        }
+
+        private static double GetMeasuredWindowWidth()
+        {
+            return AppWindow.ActualWidth > 0 ? AppWindow.ActualWidth : Position.Orientation.GetCalculatedWindowWidth();
+        }
+
+        private static double GetMeasuredWindowHeight()
+        {
+            return AppWindow.ActualHeight > 0 ? AppWindow.ActualHeight : Position.Orientation.GetCalculatedWindowHeight();
+        }
+
+        private static void UpdateSearchPanelReservation()
+        {
+            if (AppWindow == null)
+            {
+                return;
+            }
+
+            bool reserveSearchPanelSpace = ShouldReserveSearchPanelSpace();
+            double reservedWidth = reserveSearchPanelSpace ? searchResultsGridMaxWidth : 0d;
+            double reservedHeight = reserveSearchPanelSpace ? searchResultRowHeight * 5 : 0d;
+
+            if (Settings.Default.DockLocation <= 1)
+            {
+                if (AppWindow.AuxGrid.RowDefinitions.Count < 3)
+                {
+                    return;
+                }
+
+                int reservationRowIndex = Settings.Default.DockLocation == 0 ? 2 : 0;
+                AppWindow.AuxGrid.RowDefinitions[reservationRowIndex].Height = new GridLength(reservedHeight, GridUnitType.Pixel);
+            }
+            else
+            {
+                if (AppWindow.AuxGrid.ColumnDefinitions.Count < 3)
+                {
+                    return;
+                }
+
+                int reservationColumnIndex = Settings.Default.DockLocation == 2 ? 2 : 0;
+                AppWindow.AuxGrid.ColumnDefinitions[reservationColumnIndex].Width = new GridLength(reservedWidth, GridUnitType.Pixel);
+            }
+        }
+
 
 
         public static void CenterWindowOnScreen(string sender = "Not specified", bool updateLayout = true, double testNewLeft = -1d)
         {
-            // SearchGridWidth + ChatGridWidth + LoadingRectangleWidth + ChatGridMargins + GameMargins + GameIconSize
-            // Need to make this dynamically calculate
-            //double vWidth = searchResultsGridMaxWidth + AppWindow.ChatGrid.Width + AppWindow.LoadingRectangle.Width + 16 + 10 + Settings.Default.StartupIconSize;
-            //double hHeight = searchResultRowHeight * 5 + AppWindow.ChatGrid.Height + AppWindow.LoadingRectangle.Height + 8 + 10 + Settings.Default.StartupIconSize;
-            double vWidth = auxGridMaxWidth + Settings.Default.StartupIconSize + 10;
-            double hHeight = auxGridMaxHeight + Settings.Default.StartupIconSize + 10;
-            //Console.WriteLine("vWidth is " + vWidth);
-            //Console.WriteLine("hHeight is " + hHeight);
-            //Console.WriteLine("Current win height is " + AppWindow.Height);
-            //Console.WriteLine("Current win actual height is " + AppWindow.ActualHeight);
-            //Console.WriteLine("Current win width is " + AppWindow.Width);
-            //Console.WriteLine("Current win actual width is " + AppWindow.ActualWidth);
-
             Console.WriteLine($"<<< Center Window On Screen src: {sender} >>>");
 
             if (updateLayout)
@@ -3070,134 +3164,82 @@ namespace Fuzion
                 AppWindow.UpdateLayout();
             }
 
+            UpdateSearchPanelReservation();
+            Rect workingArea = GetActiveScreenWorkingAreaDip();
+            AppWindow.WindowState = WindowState.Normal;
+
             // To-do find a way to stick window to edges properly by using a dynamic value - maybe use updatelayout always before setting (updatelayout is slow as I recall)
             switch (Settings.Default.DockLocation)
             {
                 case 0: //top
-                    if (SystemParameters.VirtualScreenTop < -99)
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Height);
-                    }
-                    else
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top;
-                    }
-                    // Fix for negative values LEFT
-                    if (SystemParameters.VirtualScreenLeft < -99)
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Width);
-                    }
-                    else
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left;
-                    }
+                    AppWindow.MinHeight = 0;
+                    AppWindow.Height = double.NaN;
+                    AppWindow.MaxHeight = double.PositiveInfinity;
 
-                    AppWindow.MinWidth = Position.Monitors.ActiveScreen.WorkingArea.Width;
-                    AppWindow.Width = Position.Monitors.ActiveScreen.WorkingArea.Width;
-                    AppWindow.MaxWidth = Position.Monitors.ActiveScreen.WorkingArea.Width;
+                    AppWindow.Top = workingArea.Top;
+                    AppWindow.Left = workingArea.Left;
+
+                    AppWindow.MinWidth = workingArea.Width;
+                    AppWindow.Width = workingArea.Width;
+                    AppWindow.MaxWidth = workingArea.Width;
+                    AppWindow.UpdateLayout();
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Width / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 1: //bottom
-                    //AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Bottom - Position.Orientation.GetCalculatedWindowHeight();
-                    // Fix for negative values TOP
-                    if (SystemParameters.VirtualScreenTop < -99)
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Bottom - Position.Orientation.GetCalculatedWindowHeight() + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Height);
-                    }
-                    else
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Bottom - Position.Orientation.GetCalculatedWindowHeight();
-                    }
-                    // Fix for negative values LEFT
-                    if (SystemParameters.VirtualScreenLeft < -99)
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Width);
-                    }
-                    else
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left;
-                    }
+                    AppWindow.MinHeight = 0;
+                    AppWindow.Height = double.NaN;
+                    AppWindow.MaxHeight = double.PositiveInfinity;
 
-                    AppWindow.MinWidth = Position.Monitors.ActiveScreen.WorkingArea.Width;
-                    AppWindow.Width = Position.Monitors.ActiveScreen.WorkingArea.Width;
-                    AppWindow.MaxWidth = Position.Monitors.ActiveScreen.WorkingArea.Width;
+                    AppWindow.Left = workingArea.Left;
+
+                    AppWindow.MinWidth = workingArea.Width;
+                    AppWindow.Width = workingArea.Width;
+                    AppWindow.MaxWidth = workingArea.Width;
+
+                    AppWindow.UpdateLayout();
+                    AppWindow.Top = workingArea.Bottom - GetMeasuredWindowHeight();
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Width / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 2: //left
-                    // Fix for negative values TOP
-                    if (SystemParameters.VirtualScreenTop < -99)
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Height);
-                    }
-                    else
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top;
-                    }
+                    AppWindow.MinWidth = 0;
+                    AppWindow.Width = double.NaN;
+                    AppWindow.MaxWidth = double.PositiveInfinity;
+
+                    AppWindow.MinHeight = workingArea.Height;
+                    AppWindow.Height = workingArea.Height;
+                    AppWindow.MaxHeight = workingArea.Height;
+                    AppWindow.UpdateLayout();
+
+                    AppWindow.Top = workingArea.Top;
 
                     if (testNewLeft == -1d)
                     {
-                        // Fix for negative values LEFT
-                        if (SystemParameters.VirtualScreenLeft < -99)
-                        {
-                            AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Width);
-                        }
-                        else
-                        {
-                            AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Left;
-                        }
+                        AppWindow.Left = workingArea.Left;
                     }
                     else
                     {
                         AppWindow.Left = testNewLeft;
                     }
-                    //AppWindow.Left = newLeft;
-
-                    //// Using SetWindowPos pinvoke
-                    //Console.WriteLine("Reported Left: "+Position.Monitors.ActiveScreen.WorkingArea.Left);
-                    //Console.WriteLine("Reported Location: "+Position.Monitors.ActiveScreen.WorkingArea.Location);
-                    //_ = SetWindowPosNative(AppWindow, IntPtr.Zero,
-                    //    Position.Monitors.ActiveScreen.WorkingArea.Left,
-                    //    Position.Monitors.ActiveScreen.WorkingArea.Top,
-                    //    0,
-                    //    0,
-                    //    SWP_NOSIZE | SWP_NOZORDER);
-
-                    AppWindow.MinHeight = Position.Monitors.ActiveScreen.WorkingArea.Height;
-                    AppWindow.Height = Position.Monitors.ActiveScreen.WorkingArea.Height;
-                    AppWindow.MaxHeight = Position.Monitors.ActiveScreen.WorkingArea.Height;
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Height / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 3: //right
-                        // Fix for negative values TOP
-                    if (SystemParameters.VirtualScreenTop < -99)
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Height);
-                    }
-                    else
-                    {
-                        AppWindow.Top = Position.Monitors.ActiveScreen.WorkingArea.Top;
-                    }
-                    //AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Right - Position.Orientation.GetCalculatedWindowWidth();
-                    // Fix for negative values LEFT
-                    if (SystemParameters.VirtualScreenLeft < -99)
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Right - Position.Orientation.GetCalculatedWindowWidth() + Math.Abs(Position.Monitors.ActiveScreen.WorkingArea.Width);
-                    }
-                    else
-                    {
-                        AppWindow.Left = Position.Monitors.ActiveScreen.WorkingArea.Right - Position.Orientation.GetCalculatedWindowWidth();
-                    }
+                    AppWindow.MinWidth = 0;
+                    AppWindow.Width = double.NaN;
+                    AppWindow.MaxWidth = double.PositiveInfinity;
 
+                    AppWindow.MinHeight = workingArea.Height;
+                    AppWindow.Height = workingArea.Height;
+                    AppWindow.MaxHeight = workingArea.Height;
 
-                    AppWindow.MinHeight = Position.Monitors.ActiveScreen.WorkingArea.Height;
-                    AppWindow.Height = Position.Monitors.ActiveScreen.WorkingArea.Height;
-                    AppWindow.MaxHeight = Position.Monitors.ActiveScreen.WorkingArea.Height;
+                    AppWindow.UpdateLayout();
+                    AppWindow.Top = workingArea.Top;
+                    AppWindow.Left = workingArea.Right - GetMeasuredWindowWidth();
 
                     // Recalculate ScrollVisibleIconCount
                     ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Height / (Settings.Default.StartupIconSize + 3);
@@ -3276,6 +3318,88 @@ namespace Fuzion
             }
         }
 
+        private static void ConfigureMainParentForHorizontalLayout()
+        {
+            AppWindow.MainParent.RowDefinitions.Clear();
+            AppWindow.MainParent.ColumnDefinitions.Clear();
+
+            AppWindow.MainParent.ColumnDefinitions.Add(new ColumnDefinition()
+            {
+                Width = new GridLength(1, GridUnitType.Star)
+            });
+
+            var topRow = new RowDefinition()
+            {
+                Name = "AuxPositionWhenDockLocationBottom",
+                Height = new GridLength(1, GridUnitType.Auto)
+            };
+
+            var centerRow = new RowDefinition()
+            {
+                Name = "DockConstantPosition",
+                Height = new GridLength(1, GridUnitType.Auto)
+            };
+
+            var bottomRow = new RowDefinition()
+            {
+                Name = "AuxPositionWhenDockLocationTop",
+                Height = new GridLength(1, GridUnitType.Auto)
+            };
+
+            AppWindow.MainParent.RowDefinitions.Add(topRow);
+            AppWindow.MainParent.RowDefinitions.Add(centerRow);
+            AppWindow.MainParent.RowDefinitions.Add(bottomRow);
+
+            Grid.SetColumn(AppWindow.DockBackgroundBorder, 0);
+            Grid.SetRow(AppWindow.DockBackgroundBorder, 1);
+
+            Grid.SetColumn(AppWindow.AuxGrid, 0);
+            Grid.SetColumn(AppWindow.SearchResultsGrid, 0);
+            Grid.SetColumn(AppWindow.DragBorder, 0);
+            Grid.SetRow(AppWindow.DragBorder, 1);
+        }
+
+        private static void ConfigureMainParentForVerticalLayout()
+        {
+            AppWindow.MainParent.RowDefinitions.Clear();
+            AppWindow.MainParent.ColumnDefinitions.Clear();
+
+            AppWindow.MainParent.RowDefinitions.Add(new RowDefinition()
+            {
+                Height = new GridLength(1, GridUnitType.Star)
+            });
+
+            var leftColumn = new ColumnDefinition()
+            {
+                Name = "AuxPositionWhenDockLocationRight",
+                Width = new GridLength(1, GridUnitType.Auto)
+            };
+
+            var centerColumn = new ColumnDefinition()
+            {
+                Name = "DockConstantPosition",
+                Width = new GridLength(1, GridUnitType.Auto)
+            };
+
+            var rightColumn = new ColumnDefinition()
+            {
+                Name = "AuxPositionWhenDockLocationRight",
+                Width = new GridLength(1, GridUnitType.Auto)
+            };
+
+            AppWindow.MainParent.ColumnDefinitions.Add(leftColumn);
+            AppWindow.MainParent.ColumnDefinitions.Add(centerColumn);
+            AppWindow.MainParent.ColumnDefinitions.Add(rightColumn);
+
+            Grid.SetRow(AppWindow.DockBackgroundBorder, 0);
+            Grid.SetColumn(AppWindow.DockBackgroundBorder, 1);
+
+            Grid.SetRow(AppWindow.AuxGrid, 0);
+            Grid.SetRow(AppWindow.SearchResultsGrid, 0);
+            Grid.SetRow(AppWindow.DragBorder, 0);
+            Grid.SetColumn(AppWindow.DragBorder, 1);
+        }
+
         enum GridOrientation { Horizontal, Vertical }
         static ColumnDefinition LeftGridOffsetColumn { get; set; }
         static ColumnDefinition RightGridOffsetColumn { get; set; }
@@ -3304,33 +3428,7 @@ namespace Fuzion
                     AppWindow.mainGrid.ColumnDefinitions.Add(gridColumn);
                 }
 
-                // Main parent from columns to rows
-                AppWindow.MainParent.RowDefinitions.Clear();
-                AppWindow.MainParent.ColumnDefinitions.Clear();
-
-                var leftRow = new RowDefinition()
-                {
-                    Name = "AuxPositionWhenDockLocationBottom",
-                    Height = new GridLength(1, GridUnitType.Auto)
-                };
-
-                var centerRow = new RowDefinition()
-                {
-                    Name = "DockConstantPosition",
-                    Height = new GridLength(1, GridUnitType.Auto)
-                };
-
-                var rightRow = new RowDefinition()
-                {
-                    Name = "AuxPositionWhenDockLocationTop",
-                    Height = new GridLength(1, GridUnitType.Auto)
-                };
-
-                AppWindow.MainParent.RowDefinitions.Add(leftRow);
-                AppWindow.MainParent.RowDefinitions.Add(centerRow);
-                AppWindow.MainParent.RowDefinitions.Add(rightRow);
-
-                Grid.SetRow(AppWindow.GridScrollViewer, 1);
+                ConfigureMainParentForHorizontalLayout();
 
                 // Grid scroll offset parent from columns to rows
                 AppWindow.GridScrollOffsetParent.ColumnDefinitions.Clear();
@@ -3433,14 +3531,11 @@ namespace Fuzion
                 {
                     // Parent
                     Grid.SetRow(AppWindow.AuxGrid, 2);
+                    Grid.SetRow(AppWindow.SearchResultsGrid, 2);
                     //----------->
                     Grid.SetRow(AppWindow.LoadingRectangle, 0);
                     Grid.SetRow(AppWindow.ChatGrid, 1);
                     Grid.SetRow(AppWindow.SearchBarParent, 1);
-                    Grid.SetRow(AppWindow.SearchResultsGrid, 2);
-
-                    // Lock the height of the search bar column for positioning purposes
-                    AppWindow.AuxGrid.RowDefinitions[2].Height = new GridLength(searchResultRowHeight * 5, GridUnitType.Pixel);
 
                     // Align Search Results grid
                     AppWindow.SearchResultsGrid.VerticalAlignment = VerticalAlignment.Top;
@@ -3450,14 +3545,11 @@ namespace Fuzion
                 {
                     // Parent
                     Grid.SetRow(AppWindow.AuxGrid, 0);
+                    Grid.SetRow(AppWindow.SearchResultsGrid, 0);
                     //----------->
                     Grid.SetRow(AppWindow.LoadingRectangle, 2);
                     Grid.SetRow(AppWindow.ChatGrid, 1);
                     Grid.SetRow(AppWindow.SearchBarParent, 1);
-                    Grid.SetRow(AppWindow.SearchResultsGrid, 0);
-
-                    // Lock the height of the search bar column for positioning purposes
-                    AppWindow.AuxGrid.RowDefinitions[0].Height = new GridLength(searchResultRowHeight * 5, GridUnitType.Pixel);
 
                     // Align Search Results grid
                     AppWindow.SearchResultsGrid.VerticalAlignment = VerticalAlignment.Bottom;
@@ -3502,33 +3594,7 @@ namespace Fuzion
                     AppWindow.mainGrid.RowDefinitions.Add(gridRow);
                 }
 
-                // Main parent from rows to columns
-                AppWindow.MainParent.RowDefinitions.Clear();
-                AppWindow.MainParent.ColumnDefinitions.Clear();
-
-                var leftColumn = new ColumnDefinition()
-                {
-                    Name = "AuxPositionWhenDockLocationRight",
-                    Width = new GridLength(1, GridUnitType.Auto)
-                };
-
-                var centerColumn = new ColumnDefinition()
-                {
-                    Name = "DockConstantPosition",
-                    Width = new GridLength(1, GridUnitType.Auto)
-                };
-
-                var rightColumn = new ColumnDefinition()
-                {
-                    Name = "AuxPositionWhenDockLocationRight",
-                    Width = new GridLength(1, GridUnitType.Auto)
-                };
-
-                AppWindow.MainParent.ColumnDefinitions.Add(leftColumn);
-                AppWindow.MainParent.ColumnDefinitions.Add(centerColumn);
-                AppWindow.MainParent.ColumnDefinitions.Add(rightColumn);
-
-                Grid.SetColumn(AppWindow.GridScrollViewer, 1);
+                ConfigureMainParentForVerticalLayout();
 
                 // Grid scroll offset parent from columns to rows
                 AppWindow.GridScrollOffsetParent.ColumnDefinitions.Clear();
@@ -3631,28 +3697,22 @@ namespace Fuzion
                 {
                     // Parent
                     Grid.SetColumn(AppWindow.AuxGrid, 2);
+                    Grid.SetColumn(AppWindow.SearchResultsGrid, 2);
                     //----------->
                     Grid.SetColumn(AppWindow.LoadingRectangle, 0);
                     Grid.SetColumn(AppWindow.ChatGrid, 1);
                     Grid.SetColumn(AppWindow.SearchBarParent, 2);
-                    Grid.SetColumn(AppWindow.SearchResultsGrid, 2);
-
-                    // Lock the width of the search bar column for positioning purposes
-                    AppWindow.AuxGrid.ColumnDefinitions[2].Width = new GridLength(searchResultsGridMaxWidth, GridUnitType.Pixel);
                 }
 
                 if (Settings.Default.DockLocation == 3) // right
                 {
                     // Parent
                     Grid.SetColumn(AppWindow.AuxGrid, 0);
+                    Grid.SetColumn(AppWindow.SearchResultsGrid, 0);
                     //----------->
                     Grid.SetColumn(AppWindow.LoadingRectangle, 2);
                     Grid.SetColumn(AppWindow.ChatGrid, 1);
                     Grid.SetColumn(AppWindow.SearchBarParent, 0);
-                    Grid.SetColumn(AppWindow.SearchResultsGrid, 0);
-
-                    // Lock the width of the search bar column for positioning purposes
-                    AppWindow.AuxGrid.ColumnDefinitions[0].Width = new GridLength(searchResultsGridMaxWidth, GridUnitType.Pixel);
                 }
 
                 AppWindow.GridScrollViewer.PanningMode = PanningMode.VerticalOnly;
@@ -3670,6 +3730,8 @@ namespace Fuzion
                 Grid.SetRow(AppWindow.SearchBarParent, 0);
                 Grid.SetRow(AppWindow.SearchResultsGrid, 0);
             }
+
+            UpdateSearchPanelReservation();
 
             ToggleScrollViewerEdgeFade();
             AppWindow.SetChatBarPositionSizeMargin();
@@ -4133,7 +4195,7 @@ namespace Fuzion
                 {
                     if (Settings.Default.BackgroundEdgeToEdge)
                     {
-                        AppWindow.DockBackgroundBorder.Width = SystemParameters.PrimaryScreenWidth;
+                        AppWindow.DockBackgroundBorder.Width = GetActiveScreenWorkingAreaDip().Width;
                     }
                     else
                     {
@@ -4461,6 +4523,8 @@ namespace Fuzion
                 ChangeChatIconsVisibilityState(true);
 
                 IsSearchBoxExpanded = true;
+                UpdateSearchPanelReservation();
+                CenterWindowOnScreen(System.Reflection.MethodBase.GetCurrentMethod().Name);
             }
 
         }
@@ -4485,11 +4549,12 @@ namespace Fuzion
                 dt.Interval = TimeSpan.FromMilliseconds(200d);
                 dt.Start();
 
+                IsSearchBoxExpanded = false;
+                UpdateSearchPanelReservation();
+
                 RearrangeGrid(GameObjects, true);
                 RefreshGrid();
                 CenterWindowOnScreen(System.Reflection.MethodBase.GetCurrentMethod().Name);
-
-                IsSearchBoxExpanded = false;
             }
 
             //// lose text focus/ clear text focus

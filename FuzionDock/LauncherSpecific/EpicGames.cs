@@ -117,36 +117,30 @@ namespace Fuzion.LauncherSpecific
 
             try
             {
-                StreamReader objReader = new StreamReader(readThisPath);
-
-                string streamLine = "";
-                int i = 0;
-
-                string appName = "";
-                string installLocation = "";
-
-                while (streamLine != null)
+                using (StreamReader objReader = new StreamReader(readThisPath))
                 {
-                    i++;
-                    streamLine = objReader.ReadLine();
+                    string streamLine;
+                    string appName;
+                    string installLocation;
 
-                    if (streamLine != null && streamLine.Contains("AppName"))
+                    while ((streamLine = objReader.ReadLine()) != null)
                     {
-                        MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
-                        appName = matches[1].ToString().Trim('"');
+                        if (streamLine.Contains("AppName"))
+                        {
+                            MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
+                            appName = matches[1].ToString().Trim('"');
 
-                        listOfGames.Add(appName);
-                    }
+                            listOfGames.Add(appName);
+                        }
 
-                    if (streamLine != null && streamLine.Contains("InstallLocation"))
-                    {
-                        MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
-                        installLocation = matches[1].ToString().Trim('"');
-                        Console.WriteLine("Install Location: " + installLocation);
+                        if (streamLine.Contains("InstallLocation"))
+                        {
+                            MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
+                            installLocation = matches[1].ToString().Trim('"');
+                            Console.WriteLine("Install Location: " + installLocation);
+                        }
                     }
                 }
-                Console.ReadLine();
-                objReader.Close();
             }
             catch (IOException)
             {
@@ -178,46 +172,41 @@ namespace Fuzion.LauncherSpecific
 
                     try
                     {
-                        StreamReader objReader = new StreamReader(file);
-
-                        string streamLine = "";
-                        int i = 0;
-
-                        while (streamLine != null)
+                        using (StreamReader objReader = new StreamReader(file))
                         {
-                            i++;
-                            streamLine = objReader.ReadLine();
+                            string streamLine;
 
-                            if (streamLine != null && streamLine.Contains("AppName"))
+                            while ((streamLine = objReader.ReadLine()) != null)
                             {
-                                // Example format: com.epicgames.launcher://apps/Curry?action=launch&silent=true
-                                MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
-                                prog.EpicAppName = matches[1].ToString().Trim('"');
-                                prog.Path = $"com.epicgames.launcher://apps/{prog.EpicAppName}?action=launch&silent=true"; //&silent = true removed because of the launcher manager feature
+                                if (streamLine.Contains("AppName"))
+                                {
+                                    // Example format: com.epicgames.launcher://apps/Curry?action=launch&silent=true
+                                    MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
+                                    prog.EpicAppName = matches[1].ToString().Trim('"');
+                                    prog.Path = $"com.epicgames.launcher://apps/{prog.EpicAppName}?action=launch&silent=true"; //&silent = true removed because of the launcher manager feature
+                                }
+
+                                if (streamLine.Contains("LaunchExecutable"))
+                                {
+                                    MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
+                                    prog.ExeName = matches[1].ToString().Trim('"');
+
+                                }
+
+                                if (streamLine.Contains("DisplayName"))
+                                {
+                                    MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
+                                    prog.DisplayName = matches[1].ToString().Trim('"');
+                                }
+
+                                if (streamLine.Contains("InstallLocation"))
+                                {
+                                    MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
+                                    prog.WorkDir = matches[1].ToString().Trim('"');
+                                }
+
                             }
-
-                            if (streamLine != null && streamLine.Contains("LaunchExecutable"))
-                            {
-                                MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
-                                prog.ExeName = matches[1].ToString().Trim('"');
-
-                            }
-
-                            if (streamLine != null && streamLine.Contains("DisplayName"))
-                            {
-                                MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
-                                prog.DisplayName = matches[1].ToString().Trim('"');
-                            }
-
-                            if (streamLine != null && streamLine.Contains("InstallLocation"))
-                            {
-                                MatchCollection matches = Regex.Matches(streamLine, "\"[^\"]*\"");
-                                prog.WorkDir = matches[1].ToString().Trim('"');
-                            }
-
                         }
-                        Console.ReadLine();
-                        objReader.Close();
                     }
                     catch (IOException)
                     {

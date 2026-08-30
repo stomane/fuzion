@@ -7,7 +7,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using Fuzion.Programs;
-using Windows.UI.WindowManagement;
 using Fuzion.Icons;
 
 namespace Fuzion
@@ -23,6 +22,9 @@ namespace Fuzion
         [STAThread]
         public static void Main()
         {
+#if DEBUG
+            Debug.DebugFileLog.Initialize();
+#endif
             if (SingleInstance<App>.InitializeAsFirstInstance(Unique))
             {
                 var application = new App();

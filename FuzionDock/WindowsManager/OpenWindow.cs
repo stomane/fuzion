@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using static Fuzion.MainWindow;
 
 namespace Fuzion.WindowsManager
@@ -65,33 +66,64 @@ namespace Fuzion.WindowsManager
                 editGameWindow.SendEditedInfoEvent += EditGameWindow_GameInfoEditedEvent;
 
                 Point startupWindowPos;
-                // x center, y center
-                var gamePos = RightClickedGame.PointToScreen(new Point(Properties.Settings.Default.StartupIconSize / 2d, Properties.Settings.Default.StartupIconSize / 2d));
+                double cardWidth = editGameWindow.Width;
+                double cardHeight = editGameWindow.Height;
+                const double gap = 10d;
+
+                // The dock's icon grid is rendered through a scale transform (see
+                // Dock.Scrolling's screenMultiplier), so RightClickedGame.ActualWidth/Height
+                // are in the icon's local, pre-scale units - not the AppWindow-space units that
+                // gamePos/Window.Left/Top use. Measure the icon's top-left and center through
+                // the same ancestor transform so the resulting half-width/half-height are
+                // already in the correct (scaled) units, instead of reusing the raw local
+                // values as offsets.
+                GeneralTransform toAppWindow = RightClickedGame.TransformToAncestor(MainWindow.AppWindow);
+                Point iconTopLeftInAppWindow = toAppWindow.Transform(new Point(0, 0));
+                Point iconCenterInAppWindow = toAppWindow.Transform(new Point(RightClickedGame.ActualWidth / 2d, RightClickedGame.ActualHeight / 2d));
+
+                double iconHalfWidth = iconCenterInAppWindow.X - iconTopLeftInAppWindow.X;
+                double iconHalfHeight = iconCenterInAppWindow.Y - iconTopLeftInAppWindow.Y;
+
+                var gamePos = new Point(MainWindow.AppWindow.Left + iconCenterInAppWindow.X, MainWindow.AppWindow.Top + iconCenterInAppWindow.Y);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[EditCardPos] DockLocation={Properties.Settings.Default.DockLocation} " +
+                    $"AppWindow.Left={MainWindow.AppWindow.Left} AppWindow.Top={MainWindow.AppWindow.Top} " +
+                    $"RightClickedGame.ActualWidth={RightClickedGame.ActualWidth} RightClickedGame.ActualHeight={RightClickedGame.ActualHeight} " +
+                    $"iconTopLeftInAppWindow={iconTopLeftInAppWindow} iconCenterInAppWindow={iconCenterInAppWindow} " +
+                    $"iconHalfWidth={iconHalfWidth} iconHalfHeight={iconHalfHeight} " +
+                    $"cardWidth={cardWidth} cardHeight={cardHeight} gamePos={gamePos}");
 
                 switch (Properties.Settings.Default.DockLocation)
                 {
-                    case 0:
-                        startupWindowPos = new Point(gamePos.X - 390d / 2d, gamePos.Y + Properties.Settings.Default.StartupIconSize / 2d + 10d);
+                    case 0: // top dock -> card appears below the icon, horizontally centered
+                        startupWindowPos = new Point(gamePos.X - cardWidth / 2d, gamePos.Y + iconHalfHeight + gap);
                         break;
-                    case 1:
-                        startupWindowPos = new Point(gamePos.X - 390d / 2d, gamePos.Y - Properties.Settings.Default.StartupIconSize / 2d - 190d);
+                    case 1: // bottom dock -> card appears above the icon, horizontally centered
+                        startupWindowPos = new Point(gamePos.X - cardWidth / 2d, gamePos.Y - iconHalfHeight - gap - cardHeight);
                         break;
-                    case 2:
-                        startupWindowPos = new Point(gamePos.X + Properties.Settings.Default.StartupIconSize / 2d + 10d, gamePos.Y - 180d / 2d);
+                    case 2: // left dock -> card appears to the right of the icon, vertically centered
+                        startupWindowPos = new Point(gamePos.X + iconHalfWidth + gap, gamePos.Y - cardHeight / 2d);
                         break;
-                    case 3:
-                        startupWindowPos = new Point(gamePos.X - Properties.Settings.Default.StartupIconSize / 2d - 400d, gamePos.Y - 180d / 2d);
+                    case 3: // right dock -> card appears to the left of the icon, vertically centered
+                        startupWindowPos = new Point(gamePos.X - iconHalfWidth - gap - cardWidth, gamePos.Y - cardHeight / 2d);
                         break;
                     default:
-                        startupWindowPos = new Point(gamePos.X - 390d / 2d, gamePos.Y + 10d);
+                        startupWindowPos = new Point(gamePos.X - cardWidth / 2d, gamePos.Y + gap);
                         break;
                 }
 
-                //editGameWindow.Top = Native.NativeMethods.GetMousePosPinvoke().Y - 10d;
-                //editGameWindow.Left = Native.NativeMethods.GetMousePosPinvoke().X - 10d;
+                // Keep the card fully within the active monitor's working area (accounts for
+                // taskbar and per-monitor DPI, same helper the dock itself uses) so it never
+                // spawns partly off-screen near a monitor edge.
+                Rect workingArea = MainWindow.GetActiveScreenWorkingAreaDip();
+                editGameWindow.Left = ClampToRange(startupWindowPos.X, workingArea.Left, workingArea.Right - cardWidth);
+                editGameWindow.Top = ClampToRange(startupWindowPos.Y, workingArea.Top, workingArea.Bottom - cardHeight);
 
-                editGameWindow.Left = startupWindowPos.X;
-                editGameWindow.Top = startupWindowPos.Y;
+                System.Diagnostics.Debug.WriteLine(
+                    $"[EditCardPos] startupWindowPos={startupWindowPos} workingArea={workingArea} " +
+                    $"final Left={editGameWindow.Left} Top={editGameWindow.Top}");
+
                 editGameWindow.Show();
                 editGameWindow.EditCurrentGame(RightClickedGame);
             }
@@ -102,6 +134,18 @@ namespace Fuzion.WindowsManager
                 focusThis.AnimateWindowHighlight();
                 focusThis.Focus();
             }
+        }
+
+        // Clamps a proposed window coordinate into [min, max]; if the working area is smaller
+        // than the window itself (max < min), just pin to the start of the area.
+        private static double ClampToRange(double value, double min, double max)
+        {
+            if (max < min)
+            {
+                return min;
+            }
+
+            return Math.Max(min, Math.Min(value, max));
         }
 
         private void EditGameWindow_GameInfoEditedEvent(object sender, ChangeGameInfoEventArgs e)

@@ -125,13 +125,6 @@ namespace Fuzion
         public EditGameWindow()
         {
             InitializeComponent();
-
-            // Arrange windows in grid - unfinished
-            //var windowInitialPosition = WindowsManager.EditGameWindowsManager.GetNextWindowPosition(this);
-
-            //Left = windowInitialPosition.X;
-            //Top = windowInitialPosition.Y;
-
         }
         private void EditGameWindow_Loaded(object sender, RoutedEventArgs e) //Runs once
         {
@@ -305,7 +298,7 @@ namespace Fuzion
                 }
                 else
                 {
-                    OpenWindow.Notification(Properties.Resources.UnsupportedFormatMessage);
+                    OpenWindow.Notification(UiText.UnsupportedFormatMessage);
                 }
             }
         }
@@ -346,7 +339,7 @@ namespace Fuzion
 
             if (pathTypeSelector.SelectedIndex == 0)
             {
-                pathTextBox.Text = Properties.Resources.PathPathType;
+                pathTextBox.Text = UiText.PathPathType;
                 pathTextBox.IsReadOnly = true;
                 selectPathButton.Visibility = Visibility.Visible;
                 newPathType = PathType.Path;
@@ -355,7 +348,7 @@ namespace Fuzion
             }
             else
             {
-                pathTextBox.Text = Properties.Resources.URIPathType;
+                pathTextBox.Text = UiText.UriPathType;
                 pathTextBox.IsReadOnly = false;
                 selectPathButton.Visibility = Visibility.Hidden;
                 newPathType = PathType.URI;
@@ -529,7 +522,6 @@ namespace Fuzion
 
         private void Window_Closed(object sender, EventArgs e)
         {
-            WindowsManager.EditGameWindowsManager.RemoveWndRef(this);
             OpenWindowsManager.WindowReferenceControl($"{editedGame} Card", this, OpenWindowsManager.R.Remove);
         }
 
@@ -745,7 +737,7 @@ namespace Fuzion
             }
             catch (Exception)
             {
-                OpenWindow.Notification(Properties.Resources.UnsupportedFormatMessage);
+                OpenWindow.Notification(UiText.UnsupportedFormatMessage);
             }
         }
 

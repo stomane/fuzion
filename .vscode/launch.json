@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Fuzion (.NET Framework)",
+      "type": "clr",
+      "request": "launch",
+      "program": "${workspaceFolder}/FuzionDock/bin/Debug/Fuzion.exe",
+      "cwd": "${workspaceFolder}/FuzionDock",
+      "preLaunchTask": "Build Fuzion (Debug)",
+      "stopAtEntry": false,
+      "justMyCode": true
+    }
+  ]
+}

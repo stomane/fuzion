@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Fuzion.AI;
 using Fuzion.Extensions;
 using Fuzion.Programs;
 
@@ -13,6 +14,59 @@ namespace Fuzion.IGDB
 {
     class GameCheck
     {
+        private static readonly object batchDecisionLock = new object();
+        private static HashSet<string> batchKnownPrograms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static Dictionary<string, string> batchGamePrograms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        public static void PreloadBatchGameDecisions(IEnumerable<Program> programs)
+        {
+            System.Diagnostics.Debug.WriteLine("[GameCheck] Preloading batch game decisions...");
+            GeminiGameClassifier.ClassificationResult classification = GeminiGameClassifier.ClassifyGames(programs);
+
+            System.Diagnostics.Debug.WriteLine($"[GameCheck] Batch preload: {classification.Games.Count} games, {classification.EvaluatedNames.Count} evaluated");
+
+            lock (batchDecisionLock)
+            {
+                // Only programs Gemini actually finished classifying count as "known" here.
+                // Anything it never evaluated (skipped, or its batch's API call failed) falls
+                // through to the local DB / IGDB checks below instead of being assumed not-a-game.
+                batchKnownPrograms = classification.EvaluatedNames;
+                batchGamePrograms = classification.Games;
+            }
+        }
+
+        private static bool TryGetBatchDecision(Program prog, out bool isGame)
+        {
+            isGame = false;
+
+            if (prog == null || string.IsNullOrWhiteSpace(prog.DisplayName))
+            {
+                return false;
+            }
+
+            lock (batchDecisionLock)
+            {
+                if (!batchKnownPrograms.Contains(prog.DisplayName))
+                {
+                    return false;
+                }
+
+                if (batchGamePrograms.TryGetValue(prog.DisplayName, out string canonicalTitle))
+                {
+                    if (string.IsNullOrWhiteSpace(prog.DockName) || string.Equals(prog.DockName, prog.DisplayName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        prog.DockName = canonicalTitle;
+                    }
+
+                    isGame = true;
+                    return true;
+                }
+
+                isGame = false;
+                return true;
+            }
+        }
+
         //this returns a bool which says whether it's a game or not, needs to check local data and other places too
         // Will not return partial matches, have to try changing that
 
@@ -23,194 +77,148 @@ namespace Fuzion.IGDB
             /// <returns></returns>
         public static bool IsGame(Program prog)
         {
+            if (prog == null)
+            {
+                return false;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[GameCheck] Starting IsGame check for: {prog.DisplayName}");
             int trueCount = 0;
             int falseCount = 0;
 
-            if (prog != null)
+            // Has it been preset from launcher scans?
+            if (prog.IsGame)
             {
-                // Has it been preset from launcher scans?
-                //Console.WriteLine("Is marked game from previous scan?");
-                if (prog.IsGame)
-                {
-                    Console.WriteLine($"{prog.DisplayName} Returned true already marked as game");
-                    prog.IsGame = true;
-                    return true;
-                    //trueCount++;
-                }
-
-                // Is it a false positive?
-                //Console.WriteLine("Is in false positive const list?");
-                if (prog.DisplayName.IsFalsePositive())
-                {
-                    Console.WriteLine($"{prog.DisplayName} Returned false is false positive");
-                    prog.IsGame = false;
-                    return false;
-                    //falseCount++;
-                }
-
-                // OLD
-                //if (prog.DisplayName.IsGame())
-                //{
-                //    Console.WriteLine($"{prog.DisplayName} Returned true already marked as game in games.fzn");
-                //    //prog.IsGame = true;
-                //    //return true;
-                //    trueCount++;
-                //}
-
-                // NEW
-                // Is it marked as a game in the local game database?
-                //Console.WriteLine("Is in games.fzn?");
-                if (LocalDatabase.IsGame(prog.DisplayName))
-                {
-                    Console.WriteLine($"{prog.DisplayName} Returned true already marked as game in games.xml");
-                    //prog.IsGame = true;
-                    //return true;
-                    trueCount++;
-                }
-
-                // Is it marked as a program in the local program database?
-                //Console.WriteLine("Is in programs.fzn?");
-                if (LocalDatabase.IsProgram(prog.DisplayName))
-                {
-                    Console.WriteLine($"{prog.DisplayName} Returned false already marked as program in programs.xml");
-                    //prog.IsGame = false;
-                    //return false;
-                    falseCount++;
-                }
-
-                // Is it in the Fuzion online database?
-                //Console.WriteLine("Is in Fuzion DB as GAME?");
-                if (SQL.DbConnection.GameExistsInDatabase(prog.DisplayName))
-                {
-                    Console.WriteLine($"{prog.DisplayName} In Fuzion online game database");
-                    //prog.IsGame = true;
-                    //return true;
-                    trueCount++;
-                }
-
-                // Is it in the Fuzion Programs database?
-                //Console.WriteLine("Is in Fuzion DB as PROGRAM?");
-                if (SQL.DbConnection.ProgramExistsInDatabase(prog.DisplayName))
-                {
-                    Console.WriteLine($"{prog.DisplayName} In Fuzion online program database");
-                    //prog.IsGame = false;
-                    //return false;
-                    falseCount++;
-                }
-
-                Console.WriteLine($"{prog.DisplayName} game check true score: {trueCount} and false score: {falseCount}");
-
-                // Evaluate scores
-                if(trueCount != 0 || falseCount != 0)
-                {
-                    // Scored more trues
-                    if(trueCount > falseCount && trueCount >= 2)
-                    {
-                        prog.IsGame = true;
-                        return true;
-                    }
-                    else if (falseCount > trueCount && falseCount >= 2)
-                    {
-                        prog.IsGame = false;
-                        return false;
-                    }
-                    else
-                    {
-                        Console.WriteLine($"{prog.DisplayName} resorted to IGDB");
-                        // Check IGDB
-                        bool result = IsIGDB(prog.DisplayName);
-                        prog.IsGame = result;
-                        return result;
-                    }
-                } 
-                else
-                {
-                    Console.WriteLine($"{prog.DisplayName} resorted to IGDB");
-                    // Check IGDB
-                    bool result = IsIGDB(prog.DisplayName);
-                    prog.IsGame = result;
-                    return result;
-                }
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: already marked as game from launcher");
+                return true;
             }
 
-            return false;
-        }
+            // Is it a false positive?
+            if (prog.DisplayName.IsFalsePositive())
+            {
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: is false positive");
+                prog.IsGame = false;
+                return false;
+            }
 
-        private static string GetUTFString(string str)
-        {
-            byte[] bytes = System.Text.Encoding.Default.GetBytes(str);
-            return System.Text.Encoding.UTF8.GetString(bytes);
+            // Is it marked as a game in the local game database?
+            if (LocalDatabase.IsGame(prog.DisplayName))
+            {
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: in local game database");
+                trueCount++;
+            }
+
+            // Is it marked as a program in the local program database?
+            if (LocalDatabase.IsProgram(prog.DisplayName))
+            {
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: in local program database");
+                falseCount++;
+            }
+
+            // Check Gemini batch decisions first
+            if (TryGetBatchDecision(prog, out bool batchIsGame))
+            {
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: resolved by Gemini batch classifier: {batchIsGame}");
+                prog.IsGame = batchIsGame;
+                return batchIsGame;
+            }
+
+            // Is it in the Fuzion online database?
+            if (SQL.DbConnection.GameExistsInDatabase(prog.DisplayName))
+            {
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: in Fuzion online game database");
+                trueCount++;
+            }
+
+            // Is it in the Fuzion Programs database?
+            if (SQL.DbConnection.ProgramExistsInDatabase(prog.DisplayName))
+            {
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: in Fuzion online program database");
+                falseCount++;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: scores - true: {trueCount}, false: {falseCount}");
+
+            // Evaluate scores
+            if (trueCount > falseCount && trueCount >= 2)
+            {
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: determined GAME by score");
+                prog.IsGame = true;
+                return true;
+            }
+            else if (falseCount > trueCount && falseCount >= 2)
+            {
+                System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: determined PROGRAM by score");
+                prog.IsGame = false;
+                return false;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: score inconclusive, falling back to IGDB");
+            bool igdbResult = IsIGDB(prog.DisplayName);
+            System.Diagnostics.Debug.WriteLine($"[GameCheck] {prog.DisplayName}: IGDB result = {igdbResult}");
+            prog.IsGame = igdbResult;
+            return igdbResult;
         }
 
         public static bool IsIGDB(string name)
         {
+            if (!Constants.HasIgdbProxyUrl)
+            {
+                System.Diagnostics.Debug.WriteLine("Skipping IGDB lookup because offline mode is active.");
+                return false;
+            }
+
             // Check IGDB
             #region IGDB Check
             string comparisonLine;
-            string comparisonName = name.ToLowerWithoutIGDBStrings(); //name.ToLowerInvariant(); //name.ToLowerNormalized();
+            string comparisonName = name.ToLowerWithoutIGDBStrings();
 
-            //comparisonName = GetUTFString(comparisonName);
-
-            //Uri uri = new Uri("https://api-v3.igdb.com/games/?fields=name&limit=5&search=" + comparisonName);
-
-            // New IGDB link
             Uri uri = new Uri($"{Constants.igdbProxyURL}/production/v4/games?fields=name&limit=5&search={comparisonName}");
 
-            WebRequest webRequest;
-            Stream objStream;
-            Console.WriteLine("<<< IGDB IsGame Check Start >>>");
-            Console.WriteLine("Sending string is: " + comparisonName);
+            System.Diagnostics.Debug.WriteLine("<<< IGDB IsGame Check Start >>>");
+            System.Diagnostics.Debug.WriteLine("Sending string is: " + comparisonName);
 
             try
             {
-                webRequest = WebRequest.Create(uri);
-                objStream = webRequest.GetResponse().GetResponseStream();
-                StreamReader streamReader = new StreamReader(objStream);
-
-                string streamLine = "";
-                int i = 0;
-
-                while (streamLine != null)
+                WebRequest webRequest = WebRequest.Create(uri);
+                using (WebResponse webResponse = webRequest.GetResponse())
+                using (Stream objStream = webResponse.GetResponseStream())
+                using (StreamReader streamReader = new StreamReader(objStream))
                 {
-                    i++;
-                    streamLine = streamReader.ReadLine();
-                    Console.WriteLine("IGDB Line Read: " + streamLine);
-
-                    if (streamLine != null && streamLine.ToLowerInvariant().Contains("\"name\""))
+                    string streamLine;
+                    while ((streamLine = streamReader.ReadLine()) != null)
                     {
+                        System.Diagnostics.Debug.WriteLine("IGDB Line Read: " + streamLine);
 
-                        comparisonLine = streamLine.ToLowerInvariant();//streamLine.ToLowerNormalized();
-                        Console.WriteLine("Game result is: " + comparisonLine);
-
-                        Regex regex = new Regex("(?<=\")(.*?)(?=\")"); // between "" but excluding "
-                        MatchCollection matches = regex.Matches(comparisonLine);
-
-                        comparisonLine = matches[matches.Count - 1].ToString(); //the last match
-                        Console.WriteLine("Regexed IGDB name is: " + comparisonLine);
-                        Console.WriteLine("Local game name is: " + comparisonName);
-
-                        if (comparisonName.ContainsMostWords(comparisonLine, 40))
+                        if (streamLine.ToLowerInvariant().Contains("\"name\""))
                         {
-                            streamReader.Close();
-                            Console.WriteLine($"{name} returned True in IGDB");
-                            return true;
+                            comparisonLine = streamLine.ToLowerInvariant();//streamLine.ToLowerNormalized();
+                            System.Diagnostics.Debug.WriteLine("Game result is: " + comparisonLine);
+
+                            Regex regex = new Regex("(?<=\")(.*?)(?=\")"); // between "" but excluding "
+                            MatchCollection matches = regex.Matches(comparisonLine);
+
+                            comparisonLine = matches[matches.Count - 1].ToString(); //the last match
+                            System.Diagnostics.Debug.WriteLine("Regexed IGDB name is: " + comparisonLine);
+                            System.Diagnostics.Debug.WriteLine("Local game name is: " + comparisonName);
+
+                            if (comparisonName.ContainsMostWords(comparisonLine, 40))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"{name} returned True in IGDB");
+                                return true;
+                            }
                         }
                     }
                 }
 
-                //Console.WriteLine("<<< IGDB IsGame Check End >>>");
-                Console.ReadLine();
-                streamReader.Close();
+                System.Diagnostics.Debug.WriteLine("<<< IGDB IsGame Check End >>>");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Exception in IsGame: " + ex.Message);
+                System.Diagnostics.Debug.WriteLine("Exception in IsGame: " + ex.Message);
             }
             #endregion
-            //prog.IsGame = false;
             return false;
         }
-
-      
     }
 }
