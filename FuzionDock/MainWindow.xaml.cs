@@ -3911,12 +3911,31 @@ namespace Fuzion
         }
 
         // Cached so the ScrollChanged handler - which fires continuously while smooth scrolling -
-        // only rebuilds the brush when something that actually affects it has changed.
+        // only rebuilds the brush when something that actually affects it has changed. The brush
+        // is kept alive across updates so an edge coming or going can be animated on its gradient
+        // stop rather than snapping between visible and faded.
         static LinearGradientBrush edgeFadeBrush;
+        static GradientStop edgeFadeStartStop;
+        static GradientStop edgeFadeEndStop;
         static bool lastFadeStart;
         static bool lastFadeEnd;
         static bool lastFadeHorizontal;
         static double lastNormalizedGradientOffset = -1d;
+
+        static readonly Duration edgeFadeDuration = new Duration(TimeSpan.FromMilliseconds(180d));
+
+        static void AnimateEdgeStop(GradientStop stop, bool faded)
+        {
+            if (stop == null)
+                return;
+
+            var animation = new ColorAnimation(faded ? Colors.Transparent : Colors.White, edgeFadeDuration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+
+            stop.BeginAnimation(GradientStop.ColorProperty, animation);
+        }
 
         public static void ToggleScrollViewerEdgeFade()
         {
@@ -3946,37 +3965,59 @@ namespace Fuzion
             // Calculate gradient stop offset from icon size
             double normalizedGradientOffset = dimension > 0d ? GradientOffsetPixels / dimension : 0.1d;
 
-            if (edgeFadeBrush != null
-                && fadeStart == lastFadeStart
-                && fadeEnd == lastFadeEnd
-                && horizontal == lastFadeHorizontal
-                && Math.Abs(normalizedGradientOffset - lastNormalizedGradientOffset) < 0.0001d)
+            bool geometryChanged = edgeFadeBrush == null
+                || horizontal != lastFadeHorizontal
+                || Math.Abs(normalizedGradientOffset - lastNormalizedGradientOffset) >= 0.0001d;
+
+            if (!geometryChanged && fadeStart == lastFadeStart && fadeEnd == lastFadeEnd)
             {
                 return;
+            }
+
+            if (geometryChanged)
+            {
+                // Rebuild from scratch, starting at the current state rather than animating in -
+                // there's nothing to transition from when the brush is first applied or the dock
+                // changes orientation.
+                edgeFadeStartStop = new GradientStop(fadeStart ? Colors.Transparent : Colors.White, 0d);
+                edgeFadeEndStop = new GradientStop(fadeEnd ? Colors.Transparent : Colors.White, 1d);
+
+                var gStops = new GradientStopCollection()
+                {
+                    edgeFadeStartStop,
+                    new GradientStop(Colors.White, normalizedGradientOffset),
+                    new GradientStop(Colors.White, 1 - normalizedGradientOffset),
+                    edgeFadeEndStop
+                };
+
+                // Set the opacity mask
+                edgeFadeBrush = new LinearGradientBrush(gStops)
+                {
+                    StartPoint = horizontal ? new Point(0, 0.5) : new Point(0.5, 0),
+                    EndPoint = horizontal ? new Point(1, 0.5) : new Point(0.5, 1)
+                };
+
+                scrollViewer.OpacityMask = edgeFadeBrush;
+            }
+            else
+            {
+                // Same brush, an edge just gained or lost more icons past it - ease it rather
+                // than letting the fade pop in and out.
+                if (fadeStart != lastFadeStart)
+                {
+                    AnimateEdgeStop(edgeFadeStartStop, fadeStart);
+                }
+
+                if (fadeEnd != lastFadeEnd)
+                {
+                    AnimateEdgeStop(edgeFadeEndStop, fadeEnd);
+                }
             }
 
             lastFadeStart = fadeStart;
             lastFadeEnd = fadeEnd;
             lastFadeHorizontal = horizontal;
             lastNormalizedGradientOffset = normalizedGradientOffset;
-
-            // Gradient stops
-            var gStops = new GradientStopCollection()
-            {
-                new GradientStop(fadeStart ? Colors.Transparent : Colors.White, 0d),
-                new GradientStop(Colors.White, normalizedGradientOffset),
-                new GradientStop(Colors.White, 1 - normalizedGradientOffset),
-                new GradientStop(fadeEnd ? Colors.Transparent : Colors.White, 1d)
-            };
-
-            // Set the opacity mask
-            edgeFadeBrush = new LinearGradientBrush(gStops)
-            {
-                StartPoint = horizontal ? new Point(0, 0.5) : new Point(0.5, 0),
-                EndPoint = horizontal ? new Point(1, 0.5) : new Point(0.5, 1)
-            };
-
-            scrollViewer.OpacityMask = edgeFadeBrush;
         }
         private static void RedoGameObjectOrientation(GridOrientation orientation)
         {

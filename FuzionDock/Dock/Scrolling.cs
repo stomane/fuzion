@@ -10,6 +10,7 @@ using System.Windows.Threading;
 using Fuzion.Properties;
 using System.Windows.Input;
 using System.Windows;
+using System.Windows.Media;
 using Fuzion.Programs;
 
 namespace Fuzion.Dock
@@ -114,6 +115,9 @@ namespace Fuzion.Dock
             }
           
 
+            // Ease the rubber band overshoot towards its target alongside the scroll itself
+            overshootOffset = MathExtensions.Lerp(overshootOffset, overshootTarget, FinalScrollLerpSpeed * 62.5d * deltaTime);
+
             Application.Current.Dispatcher.Invoke(() =>
             {
                 // Tell the scrollviewer to scroll
@@ -121,6 +125,8 @@ namespace Fuzion.Dock
                     AppWindow.GridScrollViewer.ScrollToHorizontalOffset(interpolatedScrollTarget);
                 else
                     AppWindow.GridScrollViewer.ScrollToVerticalOffset(interpolatedScrollTarget);
+
+                ApplyOvershootTransform();
 
                 // Keep tooltip at game
                 if (GameTooltip.IsOpen)
@@ -218,16 +224,20 @@ namespace Fuzion.Dock
                     LastBounceScrollDirection = ScrollDirection.None;
                     bounceStage = BounceStage.Ready;
                     FinalScrollLerpSpeed = Settings.Default.ScrollLerpSpeed;
-                    // Smooth scroll target should return to scroll limits so it doesn't bounce again
-                    //ScrollTo(scrollViewerLerper);
-                    if (SmoothScrollTarget > UpperScrollLimit)
+
+                    // Release the rubber band and pin back to the edge itself. This used to clamp
+                    // to Upper/LowerScrollLimit, which sit half a cell in and left the end icon
+                    // cropped when a bounce was interrupted.
+                    overshootTarget = 0d;
+
+                    if (SmoothScrollTarget > ScrollableMax())
                     {
-                        ScrollTo(UpperScrollLimit);
+                        ScrollTo(ScrollableMax());
                     }
 
-                    if (SmoothScrollTarget < LowerScrollLimit)
+                    if (SmoothScrollTarget < 0d)
                     {
-                        ScrollTo(LowerScrollLimit);
+                        ScrollTo(0d);
                     }
                 }
             }
@@ -275,6 +285,8 @@ namespace Fuzion.Dock
                 {
                     SmoothScrollTarget -= increment;
                 }
+
+                PushAgainstEdge(e, increment, AppWindow.GridScrollViewer.ScrollableWidth);
             }
 
             if (!IsDockHorizontal && AppWindow.GridScrollViewer.ScrollableHeight != 0) // scroll vertically
@@ -308,6 +320,8 @@ namespace Fuzion.Dock
                     SmoothScrollTarget -= increment;
                 }
 
+                PushAgainstEdge(e, increment, AppWindow.GridScrollViewer.ScrollableHeight);
+
                 Console.WriteLine("Scroll increment " + increment);
             }
 
@@ -318,6 +332,29 @@ namespace Fuzion.Dock
             canIssueGridPointUpdate = true;
 
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// Once the target is resting exactly on an edge the increment guards above stop moving
+        /// it (0 is not &gt; 0), so nothing would ever read as "pushed past the end" again and the
+        /// bounce could only ever play once. This nudges the target back out past the edge so
+        /// another overshoot plays, re-confirming you're at the end.
+        /// Only while the bounce is Ready - PhysicalScrollingTimer holds it in Finished for a
+        /// grace period after each bounce, which is what stops it firing on every wheel notch.
+        /// </summary>
+        static void PushAgainstEdge(MouseWheelEventArgs e, double increment, double scrollableMax)
+        {
+            if (!Settings.Default.BounceScroll || bounceStage != BounceStage.Ready)
+                return;
+
+            if (e.Delta > 0 && SmoothScrollTarget <= 0d)
+            {
+                SmoothScrollTarget = -increment;
+            }
+            else if (e.Delta < 0 && SmoothScrollTarget >= scrollableMax)
+            {
+                SmoothScrollTarget = scrollableMax + increment;
+            }
         }
 
         public static void ScrollTo(double target, bool instant = false)
@@ -441,119 +478,102 @@ namespace Fuzion.Dock
         static BounceStage bounceStage = BounceStage.Ready;
 
         /// <summary>
-        /// Set when a bounce settles against an edge, cleared once the user scrolls back inside
-        /// the threshold band. The resting position is flush against the edge, which is past the
-        /// trigger threshold, so without this the bounce immediately re-arms and repeats.
+        /// How far past the end the rubber band pulls - half an icon.
         /// </summary>
-        static bool bounceSuppressedAtEdge;
+        private static double OvershootDistance => ActualGameSize / 2d;
+
+        /// <summary>
+        /// Current and target rubber band displacement, in DIPs. A ScrollViewer clamps its offset
+        /// to [0, ScrollableMax], so scrolling alone can't show anything past the end - the
+        /// overshoot is a render transform on the scrolled content instead.
+        /// Positive pulls the content towards the end it started from (down/right at the top or
+        /// left edge), negative the other way.
+        /// </summary>
+        static double overshootOffset;
+        static double overshootTarget;
+        static TranslateTransform overshootTransform;
+
+        /// <summary>
+        /// Pushes the current overshoot onto the scrolled content. UI thread only.
+        /// </summary>
+        static void ApplyOvershootTransform()
+        {
+            if (AppWindow?.GridScrollOffsetParent == null)
+                return;
+
+            if (overshootTransform == null)
+            {
+                overshootTransform = new TranslateTransform();
+                AppWindow.GridScrollOffsetParent.RenderTransform = overshootTransform;
+            }
+
+            if (IsDockHorizontal)
+            {
+                overshootTransform.X = overshootOffset;
+                overshootTransform.Y = 0d;
+            }
+            else
+            {
+                overshootTransform.X = 0d;
+                overshootTransform.Y = overshootOffset;
+            }
+        }
         //static bool waitingForBounce;
         //static bool hasBounced;
         /// <summary>
-        /// Runs every tick while scrollViewerLerper is above or below thresholds
+        /// One rubber band per edge push: pull half an icon past the end, then ease back so the
+        /// last icon sits fully visible. The scroll offset itself is pinned to the edge the whole
+        /// time - only the render transform moves - so this can't leave an icon cropped.
         /// </summary>
         static void ScrollEdgeBounce()
         {
             if (LastInputSource != InputSource.Mouse)
                 return;
 
-            // Start bounce
-            // (was "> UpperScrollLimit || < UpperScrollLimit", i.e. "!= UpperScrollLimit", which
-            // is always true - so every tick bumped the lerp to the faster BounceLerpSpeed even
-            // when nowhere near an edge, making all mouse scrolling run at 1.6x the configured
-            // speed. The lower bound is meant to be LowerScrollLimit.)
-            bool pastUpper = SmoothScrollTarget > UpperScrollLimit;
-            bool pastLower = SmoothScrollTarget < LowerScrollLimit;
+            // The wheel handler lets the target run past the ends before clamping, so a target
+            // outside [0, max] is exactly "the user pushed against this edge". Using that rather
+            // than a half-cell threshold band means resting at an edge can't re-arm the bounce.
+            bool pushedPastUpper = SmoothScrollTarget > ScrollableMax();
+            bool pushedPastLower = SmoothScrollTarget < 0d;
 
-            // Re-arm only once the user has scrolled back inside the threshold band. A finished
-            // bounce parks flush against the edge, which is itself past the threshold - without
-            // this the next tick would immediately arm another bounce and it would fire on a
-            // loop for as long as you sat at the end.
-            if (!pastUpper && !pastLower)
+            if (bounceStage == BounceStage.Ready && (pushedPastUpper || pushedPastLower))
             {
-                bounceSuppressedAtEdge = false;
+                FinalScrollLerpSpeed = BounceLerpSpeed;
+                LastBounceScrollDirection = CurrentScrollDirection;
+                bounceStage = BounceStage.Started;
+
+                if (pushedPastUpper)
+                {
+                    // Pin the scroll to the end, and pull the content up to reveal space past it
+                    ScrollTo(ScrollableMax());
+                    overshootTarget = -OvershootDistance;
+                }
+                else
+                {
+                    ScrollTo(0d);
+                    overshootTarget = OvershootDistance;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[Bounce] Started - overshooting {overshootTarget:F1} at {(pushedPastUpper ? "upper" : "lower")} edge");
             }
 
-            if ((pastUpper || pastLower) && !bounceSuppressedAtEdge)
+            // Overshoot has stretched far enough, let it spring back
+            if (bounceStage == BounceStage.Started
+                && Math.Abs(overshootOffset) >= Math.Abs(overshootTarget) - ScrollTargetOffset)
             {
-                if (bounceStage == BounceStage.Ready)
-                {
-                    // increase bounce speed
-                    FinalScrollLerpSpeed = BounceLerpSpeed;
-
-                    if (pastUpper)
-                    {
-                        ScrollTo(ScrollableMax());
-                        LastBounceScrollDirection = CurrentScrollDirection;
-                        bounceStage = BounceStage.Started;
-                        System.Diagnostics.Debug.WriteLine($"[Bounce] Started at upper edge - target {SmoothScrollTarget:F1}, max {ScrollableMax():F1}");
-                    }
-
-                    if (pastLower)
-                    {
-                        ScrollTo(0);
-                        LastBounceScrollDirection = CurrentScrollDirection;
-                        bounceStage = BounceStage.Started;
-                        System.Diagnostics.Debug.WriteLine($"[Bounce] Started at lower edge - target {SmoothScrollTarget:F1}");
-                    }
-                }
-
+                overshootTarget = 0d;
+                bounceStage = BounceStage.Bounced;
+                System.Diagnostics.Debug.WriteLine($"[Bounce] Peak reached at {overshootOffset:F1}, returning");
             }
 
-            if (bounceStage == BounceStage.Started)
+            // Back home - the last icon is fully visible again
+            if (bounceStage == BounceStage.Bounced && Math.Abs(overshootOffset) <= 0.5d)
             {
-                // has reached 1 - bounce
-                if (interpolatedScrollTarget > ScrollableMax() - ScrollTargetOffset * 1d)
-                {
-                    Console.WriteLine("SVLerper reached 1 bouncing to " + UpperScrollLimit);
-                    ScrollTo(UpperScrollLimit);
-                    bounceStage = BounceStage.Bounced;
-                    Console.WriteLine("Bounce stage " + bounceStage);
-
-                }
-
-                // has reached 0 - bounce
-                if (interpolatedScrollTarget < 0 + ScrollTargetOffset * 1d)
-                {
-                    Console.WriteLine("SVLerper reached 0 bouncing to " + LowerScrollLimit);
-                    ScrollTo(LowerScrollLimit);
-                    bounceStage = BounceStage.Bounced;
-                    Console.WriteLine("Bounce stage " + bounceStage);
-                }
-            }
-
-            // waiting to return
-            if (bounceStage == BounceStage.Bounced)
-            {
-                if (LastBounceScrollDirection == ScrollDirection.Up)
-                {
-                    // is again within threshold, finished full bounce
-                    if (interpolatedScrollTarget >= LowerScrollLimit - ScrollTargetOffset)
-                    {
-                        bounceStage = BounceStage.Finished;
-                        FinalScrollLerpSpeed = Settings.Default.ScrollLerpSpeed;
-
-                        // Settle flush against the edge. The Upper/Lower limits are half a cell
-                        // in from each end - fine as thresholds for detecting an edge push, but
-                        // resting there leaves the first/last icon cropped in half.
-                        bounceSuppressedAtEdge = true;
-                        ScrollTo(0d);
-                        System.Diagnostics.Debug.WriteLine("[Bounce] Finished - settled at lower edge (0)");
-                    }
-                }
-
-                if (LastBounceScrollDirection == ScrollDirection.Down)
-                {
-                    if (interpolatedScrollTarget <= UpperScrollLimit + ScrollTargetOffset)
-                    {
-                        bounceStage = BounceStage.Finished;
-                        FinalScrollLerpSpeed = Settings.Default.ScrollLerpSpeed;
-
-                        bounceSuppressedAtEdge = true;
-                        ScrollTo(ScrollableMax());
-                        System.Diagnostics.Debug.WriteLine($"[Bounce] Finished - settled at upper edge ({ScrollableMax():F1})");
-                    }
-                }
-
+                overshootOffset = 0d;
+                overshootTarget = 0d;
+                bounceStage = BounceStage.Finished;
+                FinalScrollLerpSpeed = Settings.Default.ScrollLerpSpeed;
+                System.Diagnostics.Debug.WriteLine("[Bounce] Finished - settled flush against the edge");
             }
         }
 
