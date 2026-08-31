@@ -2,7 +2,6 @@
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 
-/MSIXApplicationProject/MSIXApplicationProject.wapproj
 /FuzionDock/dbPassword.txt
 /FuzionDock/Fuzion_1_TemporaryKey.pfx
 /FuzionDock/Fuzion_2_TemporaryKey.pfx
@@ -10,6 +9,7 @@
 /FuzionDock/GoogleSearchAPIKey.txt
 /FuzionDock/IGDBProxyURL.txt
 /FuzionDock/local.secrets.json
+local.secrets.json
 /MSIXApplicationProject
 /Releases
 /.vs
@@ -17,3 +17,14 @@
 /FuzionDock/obj/
 /FuzionDock/Fuzion/
 .mcp.json
+
+# MSIX packaging build output. The project itself (wapproj, manifest, Images) is tracked.
+# Only generated artifacts should be ignored.
+/FuzionPackaging/bin/
+/FuzionPackaging/obj/
+/FuzionPackaging/AppPackages/
+*.msix
+*.msixupload
+*.msixbundle
+*.appxsym
+*.pfx

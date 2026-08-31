@@ -63,13 +63,14 @@ The app reads configuration from environment variables now. The main ones curren
 - `GOOGLE_SEARCH_API_KEY`
 - `IGDB_PROXY_URL`
 - `DB_PASSWORD`
+- `GEMINI_API_KEY`
 - `REDDIT_CLIENT_ID`
 - `IGDB_CLIENT_ID`
 - `IGDB_CLIENT_SECRET`
 
 Those values are not required for the project to build, but some runtime features will not work without them.
 
-For local development, Fuzion now also supports an ignored file at [FuzionDock/local.secrets.example.json](FuzionDock/local.secrets.example.json): create `FuzionDock/local.secrets.json` next to the project file and the build will copy it to the output directory automatically. Environment variables still take precedence over the local file.
+For local development, Fuzion now also supports an ignored file at [FuzionDock/local.secrets.example.json](FuzionDock/local.secrets.example.json): create `FuzionDock/local.secrets.json` next to the project file and Debug builds will copy it to the output directory automatically. Release and Store packaging builds do not copy that file, so local secrets do not get embedded into a submission by accident. Environment variables still take precedence over the local file.
 
 The current app uses:
 
@@ -87,7 +88,9 @@ Gemini setup for this repo:
 2. Import the Google Cloud project you want to bill against if it is not already visible.
 3. Create a new Gemini API key there. New keys are auth keys by default.
 4. Restrict the key to Gemini API only.
-5. Put the value in `FuzionDock/local.secrets.json` as `GeminiApiKey` or set `GEMINI_API_KEY` in your environment.
+5. For local development only, put the value in `FuzionDock/local.secrets.json` as `GeminiApiKey` or set `GEMINI_API_KEY` in your environment.
+
+Do not ship a shared Gemini API key inside a published desktop build. Any key bundled into the client can be extracted and abused. For a production release, either run Gemini calls through your own backend and keep the real key server-side, or leave the feature disabled by default and let advanced users supply their own key locally.
 
 The current implementation uses Gemini structured JSON output through the Gemini `generateContent` API to classify a batch of detected programs and return only actual games.
 
