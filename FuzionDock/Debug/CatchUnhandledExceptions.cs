@@ -91,7 +91,9 @@ namespace Fuzion.Debug
             //System.Windows.Forms.MessageBox.Show(e.ExceptionObject.ToString());
             //ExceptionReporting.Report(e.ExceptionObject.ToString());
             Native.ThreadedHook.DisableAllHooks();
-            Analytics.AnalyticsHelper.Current.LogEvent("Fuzion Crashed", "Fuzion Event");
+            // Crash reporting to Sentry is intentionally not wired up yet - usage tracking
+            // (Release Health sessions) is opt-out-by-default, but actual crash/error capture
+            // should only start once it's exposed as an explicit user opt-in setting.
             DebugWindow error = new DebugWindow();
             error.DebugTextBox.Text = e.ExceptionObject.ToString();
             error.Title = "Exception Stacktrace";
