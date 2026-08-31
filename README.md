@@ -25,6 +25,10 @@ Fuzion has been published to the Windows Store as a UWP app and a Standalone app
 
 I'm looking for someone who wants to seriously take on the project and manage the public repository. If you're interested, please contact me using the Fuzion Discord: https://discord.gg/KQRrT6JBUv
 
+## Support
+
+If you'd like to support development, you can do so on Ko-fi: https://ko-fi.com/fuzion
+
 ## Configuration
 
 Every key below is optional - games can always be added manually from the UI regardless of configuration, and Fuzion runs fine with zero setup, starting in offline mode with local detection only. For the best experience, we recommend setting up:

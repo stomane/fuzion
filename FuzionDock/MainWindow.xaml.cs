@@ -35,7 +35,6 @@ using Fuzion.SettingsManager;
 using Fuzion.Icons;
 using SharpDX.Win32;
 using System.Windows.Threading;
-using Fuzion.Analytics;
 using Fuzion.Update;
 using System.Windows.Data;
 using System.Windows.Documents;
@@ -321,7 +320,6 @@ namespace Fuzion
             CreateTaskbarIcon();
             ChangeAddRemoveProgramsIcon();
             InitializeUniversalLaunchOnStartup();
-            AnalyticsHelper.Initialize();
             SetDockLocationDefaultValues();
             CreateGameTooltip();
             //TrayIcon.FocusFuzionOnClick();
@@ -5499,7 +5497,6 @@ namespace Fuzion
         private void mainWindow_Closed(object sender, EventArgs e)
         {
             //Console.WriteLine("MainWindow was closed");
-            AnalyticsHelper.Current.LogEvent("Fuzion Closed", "Fuzion Event");
         }
 
         public static void RestartFuzion()
@@ -5537,7 +5534,6 @@ namespace Fuzion
 
         public static void GracefulShutdown()
         {
-            AnalyticsHelper.Current.LogEvent("Fuzion Shutdown", "Fuzion Event");
             Settings.Default.Save();
             TrayIcon.notifyIcon.Visible = false;
             TrayIcon.notifyIcon.Dispose();

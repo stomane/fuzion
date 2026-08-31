@@ -16,6 +16,7 @@ namespace Fuzion
             public string SteamApiKey { get; set; }
             public string GeminiApiKey { get; set; }
             public string GeminiModel { get; set; }
+            public string SentryDsn { get; set; }
         }
 
         private static readonly LocalSecrets localSecrets = LoadLocalSecrets();
@@ -45,10 +46,24 @@ namespace Fuzion
             localSecrets?.GeminiModel,
             null);
 
+        public static string sentryDsn = GetConfiguredValue(
+            "SENTRY_DSN",
+            localSecrets?.SentryDsn,
+            null);
+
         public static bool HasGoogleSearchApiKey => !string.IsNullOrWhiteSpace(gSearchApiKey);
         public static bool HasIgdbProxyUrl => !string.IsNullOrWhiteSpace(igdbProxyURL);
         public static bool HasGeminiApiKey => !string.IsNullOrWhiteSpace(geminiApiKey);
         public static string GeminiModel => string.IsNullOrWhiteSpace(geminiModel) ? "gemini-3.6-flash" : geminiModel.Trim();
+
+        // Sentry DSNs are safe to ship in client code (they only permit sending events into
+        // this project, not reading data back out), so unlike the keys above this one is fine
+        // hardcoded as the default - override via SENTRY_DSN or local.secrets.json for a fork
+        // pointing at a different Sentry project.
+        public static string SentryDsn => string.IsNullOrWhiteSpace(sentryDsn)
+            ? "https://955a4c0748791bbb5bf4de351a000015@o4512004309647360.ingest.de.sentry.io/4512004322426960"
+            : sentryDsn.Trim();
+
         public static bool IsOfflineMode => !HasGoogleSearchApiKey && !HasIgdbProxyUrl && !HasGeminiApiKey;
 
         private static LocalSecrets LoadLocalSecrets()

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using Fuzion.Programs;
 using Fuzion.Icons;
+using Sentry;
 
 namespace Fuzion
 {
@@ -27,9 +28,29 @@ namespace Fuzion
 #endif
             if (SingleInstance<App>.InitializeAsFirstInstance(Unique))
             {
+                SentrySdk.Init(options =>
+                {
+                    options.Dsn = Constants.SentryDsn;
+
+                    // Usage tracking only for now: Release Health sessions give us "how many
+                    // people have the app open" without capturing any error/crash data. Actual
+                    // crash reporting is deliberately left off until it's exposed as an
+                    // explicit user opt-in setting - Init() captures unhandled exceptions by
+                    // default, so that's disabled here.
+                    options.AutoSessionTracking = true;
+                    options.DisableAppDomainUnhandledExceptionCapture();
+
+                    options.Debug = false;
+                });
+
                 var application = new App();
                 application.InitializeComponent();
                 application.Run();
+
+                // Run() returns once the message loop exits, regardless of which shutdown
+                // path triggered it - flush the Release Health session and any queued events
+                // here so every exit path is covered in one place.
+                SentrySdk.Close();
 
                 // Allow single instance code to perform cleanup operations
                 SingleInstance<App>.Cleanup();
