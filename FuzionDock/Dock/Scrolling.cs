@@ -439,6 +439,13 @@ namespace Fuzion.Dock
         }
         enum BounceStage { Ready, Started, Bounced, Finished }
         static BounceStage bounceStage = BounceStage.Ready;
+
+        /// <summary>
+        /// Set when a bounce settles against an edge, cleared once the user scrolls back inside
+        /// the threshold band. The resting position is flush against the edge, which is past the
+        /// trigger threshold, so without this the bounce immediately re-arms and repeats.
+        /// </summary>
+        static bool bounceSuppressedAtEdge;
         //static bool waitingForBounce;
         //static bool hasBounced;
         /// <summary>
@@ -454,27 +461,39 @@ namespace Fuzion.Dock
             // is always true - so every tick bumped the lerp to the faster BounceLerpSpeed even
             // when nowhere near an edge, making all mouse scrolling run at 1.6x the configured
             // speed. The lower bound is meant to be LowerScrollLimit.)
-            if (SmoothScrollTarget > UpperScrollLimit || SmoothScrollTarget < LowerScrollLimit)
+            bool pastUpper = SmoothScrollTarget > UpperScrollLimit;
+            bool pastLower = SmoothScrollTarget < LowerScrollLimit;
+
+            // Re-arm only once the user has scrolled back inside the threshold band. A finished
+            // bounce parks flush against the edge, which is itself past the threshold - without
+            // this the next tick would immediately arm another bounce and it would fire on a
+            // loop for as long as you sat at the end.
+            if (!pastUpper && !pastLower)
+            {
+                bounceSuppressedAtEdge = false;
+            }
+
+            if ((pastUpper || pastLower) && !bounceSuppressedAtEdge)
             {
                 if (bounceStage == BounceStage.Ready)
                 {
                     // increase bounce speed
                     FinalScrollLerpSpeed = BounceLerpSpeed;
 
-                    if (SmoothScrollTarget > UpperScrollLimit)
+                    if (pastUpper)
                     {
                         ScrollTo(ScrollableMax());
                         LastBounceScrollDirection = CurrentScrollDirection;
                         bounceStage = BounceStage.Started;
-                        Console.WriteLine("Bounce stage " + bounceStage);
+                        System.Diagnostics.Debug.WriteLine($"[Bounce] Started at upper edge - target {SmoothScrollTarget:F1}, max {ScrollableMax():F1}");
                     }
 
-                    if (SmoothScrollTarget < LowerScrollLimit)
+                    if (pastLower)
                     {
                         ScrollTo(0);
                         LastBounceScrollDirection = CurrentScrollDirection;
                         bounceStage = BounceStage.Started;
-                        Console.WriteLine("Bounce stage " + bounceStage);
+                        System.Diagnostics.Debug.WriteLine($"[Bounce] Started at lower edge - target {SmoothScrollTarget:F1}");
                     }
                 }
 
@@ -511,13 +530,14 @@ namespace Fuzion.Dock
                     if (interpolatedScrollTarget >= LowerScrollLimit - ScrollTargetOffset)
                     {
                         bounceStage = BounceStage.Finished;
-                        Console.WriteLine("Bounce stage " + bounceStage);
                         FinalScrollLerpSpeed = Settings.Default.ScrollLerpSpeed;
 
                         // Settle flush against the edge. The Upper/Lower limits are half a cell
                         // in from each end - fine as thresholds for detecting an edge push, but
                         // resting there leaves the first/last icon cropped in half.
+                        bounceSuppressedAtEdge = true;
                         ScrollTo(0d);
+                        System.Diagnostics.Debug.WriteLine("[Bounce] Finished - settled at lower edge (0)");
                     }
                 }
 
@@ -526,10 +546,11 @@ namespace Fuzion.Dock
                     if (interpolatedScrollTarget <= UpperScrollLimit + ScrollTargetOffset)
                     {
                         bounceStage = BounceStage.Finished;
-                        Console.WriteLine("Bounce stage " + bounceStage);
                         FinalScrollLerpSpeed = Settings.Default.ScrollLerpSpeed;
 
+                        bounceSuppressedAtEdge = true;
                         ScrollTo(ScrollableMax());
+                        System.Diagnostics.Debug.WriteLine($"[Bounce] Finished - settled at upper edge ({ScrollableMax():F1})");
                     }
                 }
 

@@ -190,8 +190,6 @@ namespace Fuzion
         public static string DefaultAssetPath { get; } = GetDefaultAssetPath();
         public static string DefaultSettingsPath { get; } = GetDefaultSettingsPath();
 
-        private static double MainScreenRelativeWidth { get; set; }
-        private static double MainScreenRelativeHeight { get; set; }
         #endregion
 
         public static bool LaunchedFromStartup { get; set; }
@@ -249,33 +247,6 @@ namespace Fuzion
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Tzar\\");
         }
 
-        private static void SetMainScreenRelativeWidthHeight()
-        {
-            double sWidth = Position.Monitors.ActiveScreen.Bounds.Width;//SystemParameters.PrimaryScreenWidth;
-            double mainScreenRelativeWidth = sWidth;
-
-            double sHeight = Position.Monitors.ActiveScreen.Bounds.Height; //SystemParameters.PrimaryScreenHeight;
-            double mainScreenRelativeHeight = sHeight;
-
-            PresentationSource source = PresentationSource.FromVisual(AppWindow);
-            if (source != null)
-            {
-                //dpiX = 96.0 * source.CompositionTarget.TransformToDevice.M11;
-                //dpiY = 96.0 * source.CompositionTarget.TransformToDevice.M22;
-                double dpiScaleX = source.CompositionTarget.TransformToDevice.M11;
-                double dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
-
-                // Get 100% scale resolution
-                mainScreenRelativeWidth = sWidth * dpiScaleX;
-                mainScreenRelativeHeight = sHeight * dpiScaleY;
-            }
-
-            Console.WriteLine("MainScreenRelativeWidth set to: " + mainScreenRelativeWidth);
-            Console.WriteLine("MainScreenRelativeHeight set to: " + mainScreenRelativeHeight);
-            MainScreenRelativeWidth = mainScreenRelativeWidth;
-            MainScreenRelativeHeight = mainScreenRelativeHeight;
-        }
-
         public MainWindow()
         {
             InitializeComponent();
@@ -307,7 +278,6 @@ namespace Fuzion
         }
         private void Startup()
         {
-            SetMainScreenRelativeWidthHeight();
             CreateDirectories();
             if (ShouldUseLegacyDesktopDocking())
             {
@@ -3280,17 +3250,6 @@ namespace Fuzion
 
         public static void SetDockLocation()
         {
-            var dpiMultiplierX = GetDPIScale().X;
-            var dpiMultiplierY = GetDPIScale().Y;
-
-            double screenWidth = MainScreenRelativeWidth / dpiMultiplierX;
-            double screenHeight = MainScreenRelativeHeight / dpiMultiplierY;
-
-            Console.WriteLine("MainScreenRelativeWidth: " + MainScreenRelativeWidth);
-            Console.WriteLine("DPI Multiplier: " + dpiMultiplierX);
-            Console.WriteLine("PrimaryScreenWidth: " + SystemParameters.PrimaryScreenWidth);
-            Console.WriteLine("Calculated Screen Width: " + screenWidth);
-
             SetDockLocationDefaultValues();
 
             if (Settings.Default.DockLocation <= 1)
