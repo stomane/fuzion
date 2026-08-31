@@ -15,11 +15,13 @@ Here are videos showing some of its features:
 
 ## Current Status
 
-Fuzion has been published to the Windows Store as a UWP app and a Standalone app, but those published builds are currently not showing the dock on newer versions of Windows 10/11, probably because of changes in Desktop rendering. The latest version in this repository has been updated and confirmed working on Windows 11 - build it yourself following the instructions below rather than using the Store builds.
+The Microsoft Store is the official place to get Fuzion:
 
-**Windows Store Links:**
-- [Fuzion Dock (UWP)](https://apps.microsoft.com/detail/9MTL580GPQ00?hl=en-us&gl=US&ocid=pdpshare)
-- [Fuzion Dock (Standalone)](https://apps.microsoft.com/detail/XP8C9QP4X6CN53?hl=en-US&gl=US&ocid=pdpshare)
+**[Fuzion Dock on the Microsoft Store](https://apps.microsoft.com/detail/9MTL580GPQ00)**
+
+The currently published build doesn't show the dock on newer versions of Windows 10/11, probably because of changes in Desktop rendering. The latest version in this repository has been updated and confirmed working on Windows 11, and is what the next Store release will ship - until then, build it yourself following the instructions below.
+
+A second "Standalone" EXE listing used to exist and has been retired, so there's one listing to point people at. The Store handles installation and updates, so Fuzion has no in-app updater.
 
 ## Looking for a Maintainer
 
@@ -61,23 +63,29 @@ To reduce language-server restore warnings for native/runtime-specific packages,
 The app reads configuration from environment variables now. The main ones currently referenced in code are:
 
 - `GOOGLE_SEARCH_API_KEY`
+- `GOOGLE_SEARCH_PROXY_URL`
 - `IGDB_PROXY_URL`
 - `DB_PASSWORD`
 - `GEMINI_API_KEY`
+- `GEMINI_PROXY_URL`
 - `REDDIT_CLIENT_ID`
 - `IGDB_CLIENT_ID`
 - `IGDB_CLIENT_SECRET`
 
 Those values are not required for the project to build, but some runtime features will not work without them.
 
-For local development, Fuzion now also supports an ignored file at [FuzionDock/local.secrets.example.json](FuzionDock/local.secrets.example.json): create `FuzionDock/local.secrets.json` next to the project file and Debug builds will copy it to the output directory automatically. Release and Store packaging builds do not copy that file, so local secrets do not get embedded into a submission by accident. Environment variables still take precedence over the local file.
+For local development, Fuzion now also supports an ignored file at [FuzionDock/local.secrets.example.json](FuzionDock/local.secrets.example.json): create `FuzionDock/local.secrets.json` next to the project file and Debug builds will copy it to the output directory automatically. Release and Store packaging builds do not copy that file, so local secrets do not get embedded into a submission by accident. Environment variables take precedence over the local file.
+
+For published builds, safe non-secret defaults can also be shipped in [FuzionDock/App.config](FuzionDock/App.config) as `GeminiProxyUrl` and `GoogleSearchProxyUrl`. The app resolves configuration in this order: environment variable, `local.secrets.json`, then `App.config`, then any legacy text-file fallback.
 
 The current app uses:
 
 - `GoogleSearchApiKey` for online icon and executable lookup
+- `GoogleSearchProxyUrl` for a release-safe online icon/executable lookup backend
 - `IgdbProxyUrl` for IGDB-backed game detection
 - `DbPassword` for the legacy remote database path
 - `GeminiApiKey` for batched LLM-based game classification fallback
+- `GeminiProxyUrl` for a release-safe Gemini backend
 - `GeminiModel` to override the default `gemini-3.6-flash`
 
 The current codebase does not consume a Steam API key directly; Steam store search uses the `SteamStoreQuery` package without a project-specific local key.
@@ -90,7 +98,7 @@ Gemini setup for this repo:
 4. Restrict the key to Gemini API only.
 5. For local development only, put the value in `FuzionDock/local.secrets.json` as `GeminiApiKey` or set `GEMINI_API_KEY` in your environment.
 
-Do not ship a shared Gemini API key inside a published desktop build. Any key bundled into the client can be extracted and abused. For a production release, either run Gemini calls through your own backend and keep the real key server-side, or leave the feature disabled by default and let advanced users supply their own key locally.
+Do not ship a shared Gemini API key inside a published desktop build. Any key bundled into the client can be extracted and abused. For a production release, point `GeminiProxyUrl` in [FuzionDock/App.config](FuzionDock/App.config) at your backend and keep the real Gemini key server-side there. The app will send the same JSON body it already uses for `generateContent`, and the proxy should accept a `model` query parameter and return the raw Gemini JSON response.
 
 The current implementation uses Gemini structured JSON output through the Gemini `generateContent` API to classify a batch of detected programs and return only actual games.
 
@@ -100,7 +108,32 @@ Google Custom Search (icons) setup for this repo:
 2. Create a search engine at the [Programmable Search Engine control panel](https://programmablesearchengine.google.com/), with "Search the entire web" enabled and Image Search turned on, then copy its Search Engine ID (`cx`). A search engine restricted to specific sites (or without image search enabled) will silently return zero icon results.
 3. Combine both values as `<API_KEY>&cx=<SEARCH_ENGINE_ID>` and put that whole string in `FuzionDock/local.secrets.json` as `GoogleSearchApiKey`, or set `GOOGLE_SEARCH_API_KEY` in your environment the same way. The code appends this value directly as the request's `key=` parameter, so both parts need to be combined into one string.
 
+For a published build that should work for all users, do not ship the Custom Search key or engine ID in the client. Instead, point `GoogleSearchProxyUrl` in [FuzionDock/App.config](FuzionDock/App.config) at your backend. The app will send the same query parameters it already uses for Google Custom Search and expects the same JSON shape back, especially `items[].link`.
+
 If the API keys are missing, Fuzion now starts in a plain offline mode: local launcher detection and local icons still work, while Google image search and IGDB lookups are skipped.
+
+## Publishing To The Microsoft Store
+
+Fuzion ships as a **packaged desktop app**: the same full-trust WPF process, wrapped in an MSIX via Desktop Bridge. It is not a UWP app, and doesn't need to be.
+
+The manifest declares `uap10:RuntimeBehavior="packagedClassicApp"` with `uap10:TrustLevel="mediumIL"`, which means the process runs with the user's normal token at medium integrity and **not** inside an app container. That's what keeps the global keyboard/mouse hooks, XInput/DirectInput gamepad support, registry scanning and launcher folder access working exactly as they do unpackaged - the file/registry virtualization described in Microsoft's MSIX docs applies only to appContainer apps.
+
+To build the package for submission, run the **Build Store Package (MSIX)** task in VS Code (or the equivalent below), then upload the resulting `.msixupload` in Partner Center:
+
+```
+msbuild FuzionPackaging\FuzionPackaging.wapproj /restore /t:Build ^
+  /p:Configuration=Release /p:Platform=x64 ^
+  /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=StoreUpload
+```
+
+Output lands in `FuzionPackaging\AppPackages\`. Signing is intentionally off - the Store re-signs the package with its own certificate, so no code signing certificate needs to be bought or maintained. (This is a real difference from an EXE/MSI listing, which requires you to Authenticode-sign the installer yourself *and* host it at a versioned HTTPS URL on your own CDN.)
+
+Notes for maintainers:
+
+- The `Identity` block in [FuzionPackaging/Package.appxmanifest](FuzionPackaging/Package.appxmanifest) must match Partner Center's *Product identity* page exactly, or the upload is rejected.
+- Bump `Version` in that manifest for each submission, and keep `ApplicationVersion` in [FuzionDock/Fuzion.csproj](FuzionDock/Fuzion.csproj) in step with it. The Store requires the revision (fourth) part to be `0`.
+- The regular `Any CPU` build does not build the package, so the normal edit/run loop stays fast.
+- Launch-on-startup is declared as a `windows.startupTask` extension, so users can also toggle it from Settings > Apps > Startup.
 
 ## License
 

@@ -11,17 +11,29 @@ namespace Fuzion.UniversalPlatform
 {
     static class Startup
     {
-        public static bool IsUniversalPlatform { get; private set; } = false; // Hardcoded to false
-        
-        // Emulate the enum for compatibility with existing code if needed, or just use bools/strings in calling code.
-        // For now, let's keep the enum usage in mind or mock it if strictly typed elsewhere.
-        // Looking at usage: 
-        // MainWindow.xaml.cs: Settings.Default.LaunchOnStartup = await UniversalPlatform.Startup.GetCurrentStartupState().ConfigureAwait(false);
-        // Settings.Default.LaunchOnStartup is likely a boolean? checking usage...
-        // Actually MainWindow.xaml.cs line 476 implies it returns a boolean? 
-        // "Settings.Default.LaunchOnStartup = await UniversalPlatform.Startup.GetCurrentStartupState().ConfigureAwait(false);"
-        // Wait, GetCurrentStartupState returned Task<bool> in the original file.
-        
+        /// <summary>
+        /// True when running from the MSIX package (the Store build), false when running the
+        /// loose build straight out of bin. Both are the same full-trust Win32 process - this
+        /// only tells the app which distribution it was launched from, so it can skip things
+        /// the package owns (for example, the Store handles updates).
+        /// </summary>
+        public static bool IsUniversalPlatform { get; } = DetectPackagedContext();
+
+        static bool DetectPackagedContext()
+        {
+            try
+            {
+                return new global::DesktopBridge.Helpers().IsRunningAsUwp();
+            }
+            catch (Exception ex)
+            {
+                // Nothing here should ever stop the app starting up
+                Console.WriteLine("Failed to detect packaged context, assuming unpackaged: " + ex.Message);
+                return false;
+            }
+        }
+
+
         public static Task<bool> GetCurrentStartupState()
         {
             return Task.FromResult(IsRunOnStartupEnabled());

@@ -980,23 +980,10 @@ namespace Fuzion
 
         private void CheckForUpdatesButton_Click(object sender, RoutedEventArgs e)
         {
-            //e.Handled = true;
-
-            if (UniversalPlatform.Startup.IsUniversalPlatform)
-            {
-                _ = UniversalPlatform.General.CheckForUpdates();
-            }
-            else
-            {
-                // Wix Installer
-                //Update.UpdateHandler.CheckForUpdates(true);
-
-                // For ClickOnce
-                //InstallUpdateSyncWithInfo();
-
-                // Squirrel
-                SquirrelUpdate.UpdateButton();
-            }
+            // The Store is the only distribution channel, and it installs updates itself - there
+            // is no in-app updater to run. Send the user to the listing so they can see the
+            // current version and update on demand.
+            UniversalPlatform.General.OpenStorePage();
         }
 
         private void FeedbackButton_Click(object sender, RoutedEventArgs e)

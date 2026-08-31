@@ -38,6 +38,23 @@
       "problemMatcher": "$msCompile"
     },
     {
+      "label": "Build Store Package (MSIX)",
+      "detail": "Produces FuzionPackaging/AppPackages/*.msixupload for Partner Center submission.",
+      "type": "shell",
+      "command": "$vswhere = Join-Path '${env:ProgramFiles(x86)}' 'Microsoft Visual Studio\\Installer\\vswhere.exe'; $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\\**\\Bin\\MSBuild.exe' | Select-Object -First 1; if (-not $msbuild) { throw 'MSBuild.exe not found. Install Visual Studio 2022 or Build Tools with MSBuild.' }; & $msbuild 'FuzionPackaging\\FuzionPackaging.wapproj' /restore /t:Build /p:Configuration=Release /p:Platform=x64 /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=StoreUpload /nologo /m; if ($LASTEXITCODE -eq 0) { Get-ChildItem 'FuzionPackaging\\AppPackages\\*.msixupload' | ForEach-Object { Write-Host \"`nStore upload package: $($_.FullName)\" } }",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "pwsh",
+          "args": [
+            "-NoProfile",
+            "-Command"
+          ]
+        }
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
       "label": "Run Fuzion",
       "type": "shell",
       "command": "$exe = Join-Path '${workspaceFolder}' 'FuzionDock\\bin\\Debug\\Fuzion.exe'; if (-not (Test-Path $exe)) { throw 'Build output not found. Run the build task first.' }; Start-Process -FilePath $exe",

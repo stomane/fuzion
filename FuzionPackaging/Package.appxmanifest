@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap5 uap10 rescap">
+
+  <!-- Identity must match Partner Center exactly (Product identity page for Store ID 9MTL580GPQ00),
+       otherwise the Store rejects the upload. -->
+  <Identity
+    Name="53755Tzar.Fuzion"
+    Publisher="CN=68D069E9-F466-43A0-9A2F-2C66D05C4202"
+    Version="0.5.5.0" />
+
+  <Properties>
+    <DisplayName>Fuzion Dock</DisplayName>
+    <PublisherDisplayName>Tzar</PublisherDisplayName>
+    <Logo>Images\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <!-- packagedClassicApp + mediumIL is Desktop Bridge full trust: the process runs with the
+         user's normal token at medium integrity, NOT inside an app container. That's what keeps
+         the global keyboard/mouse hooks, XInput/DirectInput gamepad support, registry scanning
+         and launcher folder access working exactly as they do unpackaged. -->
+    <Application
+      Id="App"
+      Executable="Fuzion\Fuzion.exe"
+      EntryPoint="Windows.FullTrustApplication"
+      uap10:RuntimeBehavior="packagedClassicApp"
+      uap10:TrustLevel="mediumIL">
+
+      <uap:VisualElements
+        DisplayName="Fuzion Dock"
+        Description="A seamless game dock with automatic icon fetching and styling."
+        BackgroundColor="transparent"
+        Square150x150Logo="Images\Square150x150Logo.png"
+        Square44x44Logo="Images\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Images\Wide310x150Logo.png"
+          Square71x71Logo="Images\Square71x71Logo.png"
+          Square310x310Logo="Images\Square310x310Logo.png" />
+        <uap:SplashScreen Image="Images\SplashScreen.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- Launch on startup. A packaged app can't rely on the HKCU\...\Run key: that write is
+             per-package and the recorded path points inside the read-only package. The OS owns
+             this instead, and the user can toggle it in Settings > Apps > Startup.
+             The app is launched with -startup so it knows not to steal focus. -->
+        <uap5:Extension
+          Category="windows.startupTask"
+          Executable="Fuzion\Fuzion.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask
+            TaskId="FuzionDockStartupTask"
+            Enabled="false"
+            DisplayName="Fuzion Dock" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Already granted on this listing. Required for a full-trust Win32 payload. -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

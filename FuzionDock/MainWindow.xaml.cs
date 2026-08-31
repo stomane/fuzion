@@ -269,7 +269,7 @@ namespace Fuzion
             CheckForSettings();
             EnsureVisibleAfterStartup();
             AddSearchKeyPressEvents();
-            _ = Task.Run(() => SquirrelUpdate.Update());
+            // No self-updater: the Store owns updates for the packaged app.
             _ = Task.Run(() => SettingsWindow.GetDynamicImages());
             
             // Fix icon margins to remove gaps in auto-sized background
@@ -822,9 +822,6 @@ namespace Fuzion
                 else
                 {
                     Console.WriteLine("Settings Upgrade Running");
-                    //Upgrade for Squirrel
-                    SquirrelUpdate.RestoreSettings();
-
                     Settings.Default.Upgrade();
                     Settings.Default.Save();
                     Settings.Default.Reload();

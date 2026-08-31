@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Fuzion.Extensions;
 using Fuzion.Programs;
-using SharpCompress.Common;
 
 namespace Fuzion.Scanner
 {
@@ -89,7 +88,7 @@ namespace Fuzion.Scanner
                     // Old Url
                     //string url = "https://www.googleapis.com/customsearch/v1?fields=items/link&key=&num=1&q=" + strippedExe + " wikipedia";
                     //string url = "https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key=&num=1&q=" + strippedExe + " wikipedia";
-                    string url = $"https://www.googleapis.com/customsearch/v1/siterestrict?fields=items/link&key={Constants.gSearchApiKey}&num=1&q={strippedExe} wikipedia";
+                    string url = Constants.BuildGoogleWikipediaLookupUrl(strippedExe + " wikipedia");
 
                     lvDist = LevenshteinDistance.Compute(strippedExe.ToUpperInvariant(), program.DisplayName.ToUpperInvariant().Replace(" ", "")); //compare stripped exe to game name
 

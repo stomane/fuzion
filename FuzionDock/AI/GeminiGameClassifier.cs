@@ -45,9 +45,9 @@ namespace Fuzion.AI
             var games = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var evaluatedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            if (!Constants.HasGeminiApiKey || programs == null)
+            if (!Constants.HasGeminiAccess || programs == null)
             {
-                System.Diagnostics.Debug.WriteLine($"[Gemini] Skipping: HasKey={Constants.HasGeminiApiKey}, ProgramsNull={programs == null}");
+                System.Diagnostics.Debug.WriteLine($"[Gemini] Skipping: HasAccess={Constants.HasGeminiAccess}, ProgramsNull={programs == null}");
                 return new ClassificationResult(games, evaluatedNames);
             }
 
@@ -145,11 +145,7 @@ namespace Fuzion.AI
 
         private static Dictionary<string, string> ClassifyBatch(List<BatchCandidate> batch)
         {
-            string url = string.Format(
-                CultureInfo.InvariantCulture,
-                "https://generativelanguage.googleapis.com/v1beta/models/{0}:generateContent?key={1}",
-                Uri.EscapeDataString(Constants.GeminiModel),
-                Uri.EscapeDataString(Constants.geminiApiKey));
+            string url = Constants.BuildGeminiGenerateContentUrl();
 
             string prompt = BuildPrompt(batch);
 
