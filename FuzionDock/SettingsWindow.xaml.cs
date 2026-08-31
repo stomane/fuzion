@@ -252,17 +252,30 @@ namespace Fuzion
         const string DynamicContentLink = "https://fuzion.gg/dynamic/meta.json";
         const string SymbolCheckerLink = "https://fuzion.gg/dynamic/sym.json";
         private static int CurrentDynamicImageIndex = 0;
-        private static List<DynamicImage> DynamicImages = new List<DynamicImage>();
-        private static DynamicImage CurrentDynamicImage;
-        private static List<DynamicImage> LastDynamicImageList;
-        private static string dimagesSavePath = CreateDimageSavePath();
-        private static string contentUpdateSymbol;
         private class DynamicImage
         {
             public string imageSource;
             public string clickLink;
             public BitmapImage bmp;
         }
+
+        // Always shown as the first card, regardless of whether the remote content fetch below
+        // succeeds - bundled into the app itself rather than downloaded, so it can't go missing.
+        private static readonly DynamicImage KoFiSupportCard = new DynamicImage
+        {
+            clickLink = "https://ko-fi.com/fuzion",
+            // Frozen: this BitmapImage is built the first time this static field is touched,
+            // which isn't guaranteed to be the UI thread (C# doesn't pin static initializer
+            // timing to a specific thread). BitmapImage is a DispatcherObject and throws on
+            // cross-thread access unless frozen, which makes it thread-independent instead.
+            bmp = Icons.BitmapTools.ImageFromPath("pack://application:,,,/Assets/ko-fi-support-card.png", freeze: true)
+        };
+
+        private static List<DynamicImage> DynamicImages = new List<DynamicImage> { KoFiSupportCard };
+        private static DynamicImage CurrentDynamicImage;
+        private static List<DynamicImage> LastDynamicImageList;
+        private static string dimagesSavePath = CreateDimageSavePath();
+        private static string contentUpdateSymbol;
 
         public SettingsWindow()
         {
@@ -354,14 +367,25 @@ namespace Fuzion
                 //store images in vars
                 for (int i = 0; i < res.Count; i++)
                 {
+                    string cachedPath = System.IO.Path.Combine(dimagesSavePath, i + ".png");
                     using (System.Net.WebClient wc = new System.Net.WebClient())
                     {
-                        wc.DownloadFile(res[i].imageSource, System.IO.Path.Combine(dimagesSavePath, i + ".png"));
+                        wc.DownloadFile(res[i].imageSource, cachedPath);
                     }
+                    // Frozen: loaded on this background thread, but displayed later on the UI
+                    // thread via the Dispatcher.Invoke below - BitmapImage throws on cross-thread
+                    // access unless frozen.
+                    res[i].bmp = Icons.BitmapTools.ImageFromPath(cachedPath, freeze: true);
                 }
 
-                DynamicImages = res.ToList();
+                // Ko-fi always leads the rotation; remote cards follow.
+                DynamicImages = new List<DynamicImage> { KoFiSupportCard }.Concat(res).ToList();
                 contentUpdateSymbol = updateSymbol;
+
+                // Runs on a background thread (see Window_Loaded's Task.Run) and nothing else
+                // re-triggers a UI refresh after the initial call, so push it now that new
+                // content is ready.
+                Instance?.Dispatcher.Invoke(() => SetDynamicContent(CurrentDynamicImageIndex));
             }
             catch (Exception)
             {
@@ -371,7 +395,9 @@ namespace Fuzion
         }
 
         /// <summary>
-        /// Set the dynamic content and cache it, CALL with Dispatcher only
+        /// Displays the dynamic image at the given index. Each DynamicImage's bmp is already
+        /// loaded (hardcoded for the Ko-fi card, or right after download for remote ones), so
+        /// this only selects and shows it. CALL with Dispatcher only.
         /// </summary>
         /// <param name="index"></param>
         private static void SetDynamicContent(int index = 0)
@@ -388,13 +414,6 @@ namespace Fuzion
                 {
                     Instance.NextDynamicImageButton.Visibility = Visibility.Hidden;
                     Instance.PrevDynamicImageButton.Visibility = Visibility.Hidden;
-                }
-
-                // Load them from UI thread
-                for (int i = 0; i < DynamicImages.Count; i++)
-                {
-                    DynamicImages[i].bmp = Icons.BitmapTools.ImageFromPath(System.IO.Path.Combine(dimagesSavePath, i + ".png"));
-                    //File.Delete(System.IO.Path.Combine(dimagesSavePath, i + ".png"));
                 }
 
                 if (index >= DynamicImages.Count)

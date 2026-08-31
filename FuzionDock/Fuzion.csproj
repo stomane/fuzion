@@ -349,6 +349,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="local.secrets.example.json" />
+    <Resource Include="Assets\ko-fi-support-card.png" />
     <Resource Include="Assets\onlineIconIcon.png" />
     <Resource Include="Assets\fake_blur.png" />
     <Resource Include="Assets\64x\resetwhite64x.png" />
