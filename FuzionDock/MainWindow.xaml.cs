@@ -230,7 +230,6 @@ namespace Fuzion
         public static PercentageOfElement PercentageOfElementConverter { get; } = new PercentageOfElement();
         public static ScrollViewerOffsets ScrollViewerOffsetsConverter { get; } = new ScrollViewerOffsets();
         public static ScrollViewerBackgroundColor ScrollViewerBackgroundColorConverter { get; } = new ScrollViewerBackgroundColor();
-        public static double ScrollVisibleIconCount { get; private set; }
         public enum InputSource { Mouse, Keyboard, Gamepad }
         public static InputSource LastInputSource { get; set; }
 
@@ -3181,9 +3180,6 @@ namespace Fuzion
                     AppWindow.Width = workingArea.Width;
                     AppWindow.MaxWidth = workingArea.Width;
                     AppWindow.UpdateLayout();
-
-                    // Recalculate ScrollVisibleIconCount
-                    ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Width / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 1: //bottom
                     AppWindow.MinHeight = 0;
@@ -3198,9 +3194,6 @@ namespace Fuzion
 
                     AppWindow.UpdateLayout();
                     AppWindow.Top = workingArea.Bottom - GetMeasuredWindowHeight();
-
-                    // Recalculate ScrollVisibleIconCount
-                    ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Width / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 2: //left
                     AppWindow.MinWidth = 0;
@@ -3222,9 +3215,6 @@ namespace Fuzion
                     {
                         AppWindow.Left = testNewLeft;
                     }
-
-                    // Recalculate ScrollVisibleIconCount
-                    ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Height / (Settings.Default.StartupIconSize + 3);
                     break;
                 case 3: //right
                     AppWindow.MinWidth = 0;
@@ -3238,9 +3228,6 @@ namespace Fuzion
                     AppWindow.UpdateLayout();
                     AppWindow.Top = workingArea.Top;
                     AppWindow.Left = workingArea.Right - GetMeasuredWindowWidth();
-
-                    // Recalculate ScrollVisibleIconCount
-                    ScrollVisibleIconCount = Position.Monitors.ActiveScreen.Bounds.Height / (Settings.Default.StartupIconSize + 3);
                     break;
                 default:
                     break;
@@ -3964,82 +3951,73 @@ namespace Fuzion
             }
         }
 
-        static int lastScrollviewerDimension;
+        // Cached so the ScrollChanged handler - which fires continuously while smooth scrolling -
+        // only rebuilds the brush when something that actually affects it has changed.
+        static LinearGradientBrush edgeFadeBrush;
+        static bool lastFadeStart;
+        static bool lastFadeEnd;
+        static bool lastFadeHorizontal;
+        static double lastNormalizedGradientOffset = -1d;
 
-        public static void ToggleScrollViewerEdgeFade(int scrollviewerDimension = -1)
+        public static void ToggleScrollViewerEdgeFade()
         {
-            if (IsDockPerfectlyFittingScreen)
+            if (AppWindow == null)
+                return;
+
+            ScrollViewer scrollViewer = AppWindow.GridScrollViewer;
+
+            if (!Settings.Default.DockEdgeFadeEnabled || IsDockPerfectlyFittingScreen)
             {
-                //Console.WriteLine("DOCK PERFECTLY FITS");
-                AppWindow.GridScrollViewer.ClearValue(OpacityMaskProperty);
+                scrollViewer.ClearValue(OpacityMaskProperty);
+                edgeFadeBrush = null;
                 return;
             }
 
-            //Console.WriteLine("DOCK DOESN'T FIT");
+            bool horizontal = Settings.Default.DockLocation <= 1;
+            double dimension = horizontal ? scrollViewer.ActualWidth : scrollViewer.ActualHeight;
+            double offset = horizontal ? scrollViewer.HorizontalOffset : scrollViewer.VerticalOffset;
+            double max = horizontal ? scrollViewer.ScrollableWidth : scrollViewer.ScrollableHeight;
 
-            if (Settings.Default.DockEdgeFadeEnabled)
+            // Only fade an edge when there are actually more icons past it - otherwise the
+            // first/last icon sits dimmed against the end of the dock with nothing beyond it.
+            const double edgeEpsilon = 0.5d;
+            bool fadeStart = offset > edgeEpsilon;
+            bool fadeEnd = offset < max - edgeEpsilon;
+
+            // Calculate gradient stop offset from icon size
+            double normalizedGradientOffset = dimension > 0d ? GradientOffsetPixels / dimension : 0.1d;
+
+            if (edgeFadeBrush != null
+                && fadeStart == lastFadeStart
+                && fadeEnd == lastFadeEnd
+                && horizontal == lastFadeHorizontal
+                && Math.Abs(normalizedGradientOffset - lastNormalizedGradientOffset) < 0.0001d)
             {
-                // Calculate gradient stop offset from icon size
-                double normalizedGradientOffset = 0.1d;
-
-                if (Settings.Default.DockLocation <= 1)
-                {
-                    if (AppWindow.GridScrollViewer.ActualWidth != 0)
-                    {
-                        if (lastScrollviewerDimension != scrollviewerDimension || scrollviewerDimension == -1)
-                        {
-                            normalizedGradientOffset = GradientOffsetPixels / AppWindow.GridScrollViewer.ActualWidth;
-                            lastScrollviewerDimension = scrollviewerDimension;
-                        }
-                    }
-                }
-                else
-                {
-                    if (AppWindow.GridScrollViewer.ActualHeight != 0)
-                    {
-                        if (lastScrollviewerDimension != scrollviewerDimension || scrollviewerDimension == -1)
-                        {
-                            normalizedGradientOffset = GradientOffsetPixels / AppWindow.GridScrollViewer.ActualHeight;
-                            lastScrollviewerDimension = scrollviewerDimension;
-                            Console.WriteLine("EDGE FADE: Setting Normalized Gradient Offset " + normalizedGradientOffset);
-                            Console.WriteLine("lastScrollViewerDimension " + lastScrollviewerDimension);
-                            Console.WriteLine("scrollViewerDimension " + scrollviewerDimension);
-                        }
-                    }
-                }
-
-                //Console.WriteLine("Normalized Gradient Offset for Edge Fade " + normalizedGradientOffset);
-
-                // Gradient stops
-                var gStops = new GradientStopCollection()
-                {
-                    new GradientStop(Colors.Transparent, 0d),
-                    new GradientStop(Colors.White, normalizedGradientOffset),
-                    new GradientStop(Colors.White, 1 - normalizedGradientOffset),
-                    new GradientStop(Colors.Transparent, 1d)
-                };
-
-                // Set the opacity mask
-                var mask = new LinearGradientBrush(gStops);
-                AppWindow.GridScrollViewer.OpacityMask = mask;
-
-                //Horizontal
-                if (Settings.Default.DockLocation <= 1)
-                {
-                    mask.StartPoint = new Point(0, 0.5);
-                    mask.EndPoint = new Point(1, 0.5);
-                }
-                else // Vertical
-                {
-                    mask.StartPoint = new Point(0.5, 0);
-                    mask.EndPoint = new Point(0.5, 1);
-                }
-
+                return;
             }
-            else
+
+            lastFadeStart = fadeStart;
+            lastFadeEnd = fadeEnd;
+            lastFadeHorizontal = horizontal;
+            lastNormalizedGradientOffset = normalizedGradientOffset;
+
+            // Gradient stops
+            var gStops = new GradientStopCollection()
             {
-                AppWindow.GridScrollViewer.ClearValue(OpacityMaskProperty);
-            }
+                new GradientStop(fadeStart ? Colors.Transparent : Colors.White, 0d),
+                new GradientStop(Colors.White, normalizedGradientOffset),
+                new GradientStop(Colors.White, 1 - normalizedGradientOffset),
+                new GradientStop(fadeEnd ? Colors.Transparent : Colors.White, 1d)
+            };
+
+            // Set the opacity mask
+            edgeFadeBrush = new LinearGradientBrush(gStops)
+            {
+                StartPoint = horizontal ? new Point(0, 0.5) : new Point(0.5, 0),
+                EndPoint = horizontal ? new Point(1, 0.5) : new Point(0.5, 1)
+            };
+
+            scrollViewer.OpacityMask = edgeFadeBrush;
         }
         private static void RedoGameObjectOrientation(GridOrientation orientation)
         {
@@ -5598,56 +5576,15 @@ namespace Fuzion
             //}
         }
 
-        //variables to store the offset values
-        double relX;
-        double relY;
-
         private void GridScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
         {
-            //ScrollViewer scroll = sender as ScrollViewer;
-            ////see if the content size is changed
-            //if (e.ExtentWidthChange != 0 || e.ExtentHeightChange != 0)
-            //{
-            //    //calculate and set accordingly
-            //    scroll.ScrollToHorizontalOffset(CalculateOffset(e.ExtentWidth, e.ViewportWidth, scroll.ScrollableWidth, relX));
-            //    scroll.ScrollToVerticalOffset(CalculateOffset(e.ExtentHeight, e.ViewportHeight, scroll.ScrollableHeight, relY));
-            //}
-            //else
-            //{
-            //    //store the relative values if normal scroll
-
-            //    relX = (e.HorizontalOffset + 0.5 * e.ViewportWidth) / e.ExtentWidth;
-            //    relY = (e.VerticalOffset + 0.5 * e.ViewportHeight) / e.ExtentHeight;
-            //    Console.WriteLine("relX " + relX);
-            //    Console.WriteLine("relY " + relY);
-            //}
-
-            //if (Settings.Default.DockLocation <= 1)
-            //{
-            //    ToggleScrollViewerOffsets((int)GridScrollViewer.ScrollableWidth);
-            //    ToggleScrollViewerEdgeFade((int)GridScrollViewer.ActualWidth);
-            //}
-            //else
-            //{
-            //    ToggleScrollViewerOffsets((int)GridScrollViewer.ScrollableHeight);
-            //    ToggleScrollViewerEdgeFade((int)GridScrollViewer.ActualHeight);
-            //}
-
-
-        }
-
-        private static double CalculateOffset(double extent, double viewPort, double scrollWidth, double relBefore)
-        {
-            //calculate the new offset
-            double offset = relBefore * extent - 0.5 * viewPort;
-            //see if it is negative because of initial values
-            if (offset < 0)
-            {
-                //center the content
-                //this can be set to 0 if center by default is not needed
-                offset = 0.5 * scrollWidth;
-            }
-            return offset;
+            // Keeps the edge fade correct. This fires both when the content extent changes
+            // (games finish loading into the grid) and while scrolling:
+            //  - the extent case is what makes the fade appear at all. CenterWindowOnScreen runs
+            //    before the games are laid out, when the scroll viewer still reports nothing
+            //    scrollable, so ToggleScrollViewerEdgeFade would clear the mask and bail out.
+            //  - the offset case lets each edge fade only while more icons lie past it.
+            ToggleScrollViewerEdgeFade();
         }
 
         static DispatcherTimer windowActivationTimer = GetWindowActivationTimer();

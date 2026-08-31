@@ -42,7 +42,10 @@ namespace Fuzion.Position
             }
 
             // iconSize + iconMargins + loadingRect + searchResultsRow (5 of them)
-            result = result + Settings.Default.StartupIconSize + 10 + 10 + searchResultRowHeight * 5;
+            // Mirrors GetCalculatedWindowWidth: use the real margins and loading rectangle size
+            // rather than hardcoded 10s, so this stays correct if either ever changes.
+            double gameMargins = DefaultGameMargins.Top + DefaultGameMargins.Bottom;
+            result = result + Settings.Default.StartupIconSize + gameMargins + AppWindow.LoadingRectangle.ActualHeight + searchResultRowHeight * 5;
             Console.WriteLine("Calculated window height is " + result);
             return result;
         }

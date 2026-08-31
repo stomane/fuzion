@@ -18,7 +18,6 @@ namespace Fuzion.Dock
     {
         private static bool keepCenterOnStart = true;
         public static Timer ScrollTimer { get; private set; }
-        public static double ScrollVisibleIconCount { get; private set; }
         private static double FinalScrollLerpSpeed { get; set; } = Settings.Default.ScrollLerpSpeed;
         private static double BounceLerpSpeed => Settings.Default.ScrollLerpSpeed * 1.6d;
 
@@ -29,12 +28,19 @@ namespace Fuzion.Dock
             StartScrollViewerTimer();
         }
 
+        /// <summary>
+        /// ~120Hz. The lerp below is delta-time corrected, so the motion is identical to the old
+        /// 1ms tick while doing roughly an eighth of the work - each tick costs two blocking
+        /// Dispatcher.Invoke round-trips onto the UI thread, which at 1ms was thousands per second.
+        /// </summary>
+        private const int ScrollTickIntervalMs = 8;
+
         private static void StartScrollViewerTimer()
         {
             if (ScrollTimer != null)
                 return;
 
-            ScrollTimer = new Timer(ScrollTimerTick, null, 1, Timeout.Infinite);
+            ScrollTimer = new Timer(ScrollTimerTick, null, ScrollTickIntervalMs, Timeout.Infinite);
         }
 
         private static double interpolatedScrollTarget;
@@ -53,7 +59,11 @@ namespace Fuzion.Dock
         {
             // stop stopwatch
             if(deltaTimeStopwatch.IsRunning)
-                deltaTime = deltaTimeStopwatch.ElapsedMilliseconds / 1000d;
+                // TotalSeconds, not ElapsedMilliseconds: the latter is a whole-number of ms, so
+                // at this tick rate it was constantly rounding to 0 or 1 - a 0 meant the lerp
+                // didn't advance at all that tick, and a 1 could be off by ~100%. That
+                // quantisation is what made the smooth scrolling drift and stutter.
+                deltaTime = deltaTimeStopwatch.Elapsed.TotalSeconds;
             //Console.WriteLine("SW TIME: " + swTime);
             deltaTimeStopwatch.Restart();
             //Handle database push from here
@@ -128,7 +138,7 @@ namespace Fuzion.Dock
             // reset timer
             try
                 {
-                ScrollTimer.Change(1, Timeout.Infinite);
+                ScrollTimer.Change(ScrollTickIntervalMs, Timeout.Infinite);
             }
             catch (ObjectDisposedException)
             {
@@ -337,12 +347,19 @@ namespace Fuzion.Dock
 
         public static void ScrollTo(Game game, bool instant = false)
         {
-            double target = ScrollableMax() * (game.Index * (1d / (AppWindow.mainGrid.Children.Count - 2d))); // -1 for highlight child, -1d for starting from index 0
+            // Every grid cell is one ActualGameSize (icon + both margins) across, so the game's
+            // cell starts at index * ActualGameSize; offset by half a cell minus half a viewport
+            // to centre it, then clamp into the scrollable range.
+            //
+            // This used to map the index proportionally onto ScrollableMax:
+            //     ScrollableMax() * (index / (children - 2))
+            // which is only correct when the viewport happens to be exactly one cell wide. For
+            // any real viewport it under-scrolls, lining up only at the very first and last
+            // game and drifting by up to half a viewport in between.
+            double target = (game.Index * ActualGameSize) + (ActualGameSize / 2d) - (ViewportSize() / 2d);
+            target = Math.Max(0d, Math.Min(target, ScrollableMax()));
+
             Console.WriteLine("ScrollTo Game " + target);
-            // Get call stack
-            var stackTrace = new System.Diagnostics.StackTrace();
-            // Get calling method name
-            Console.WriteLine(stackTrace.GetFrame(1).GetMethod().Name);
 
             if (instant)
             {
@@ -405,6 +422,21 @@ namespace Fuzion.Dock
                 return AppWindow.GridScrollViewer.ScrollableHeight;
             }
         }
+
+        /// <summary>
+        /// Get the visible Width or Height of the scroll viewer depending on orientation
+        /// </summary>
+        public static double ViewportSize()
+        {
+            if (IsDockHorizontal)
+            {
+                return AppWindow.GridScrollViewer.ViewportWidth;
+            }
+            else
+            {
+                return AppWindow.GridScrollViewer.ViewportHeight;
+            }
+        }
         enum BounceStage { Ready, Started, Bounced, Finished }
         static BounceStage bounceStage = BounceStage.Ready;
         //static bool waitingForBounce;
@@ -418,7 +450,11 @@ namespace Fuzion.Dock
                 return;
 
             // Start bounce
-            if (SmoothScrollTarget > UpperScrollLimit || SmoothScrollTarget < UpperScrollLimit)
+            // (was "> UpperScrollLimit || < UpperScrollLimit", i.e. "!= UpperScrollLimit", which
+            // is always true - so every tick bumped the lerp to the faster BounceLerpSpeed even
+            // when nowhere near an edge, making all mouse scrolling run at 1.6x the configured
+            // speed. The lower bound is meant to be LowerScrollLimit.)
+            if (SmoothScrollTarget > UpperScrollLimit || SmoothScrollTarget < LowerScrollLimit)
             {
                 if (bounceStage == BounceStage.Ready)
                 {
@@ -477,6 +513,11 @@ namespace Fuzion.Dock
                         bounceStage = BounceStage.Finished;
                         Console.WriteLine("Bounce stage " + bounceStage);
                         FinalScrollLerpSpeed = Settings.Default.ScrollLerpSpeed;
+
+                        // Settle flush against the edge. The Upper/Lower limits are half a cell
+                        // in from each end - fine as thresholds for detecting an edge push, but
+                        // resting there leaves the first/last icon cropped in half.
+                        ScrollTo(0d);
                     }
                 }
 
@@ -487,6 +528,8 @@ namespace Fuzion.Dock
                         bounceStage = BounceStage.Finished;
                         Console.WriteLine("Bounce stage " + bounceStage);
                         FinalScrollLerpSpeed = Settings.Default.ScrollLerpSpeed;
+
+                        ScrollTo(ScrollableMax());
                     }
                 }
 
