@@ -14,6 +14,16 @@ const assetBucketName = getOptionalEnv("ASSET_BUCKET");
 const iconFetchTimeoutMs = clampInteger(process.env.ICON_FETCH_TIMEOUT_MS, 1000, 60000, 10000);
 const maxIconBytes = 8 * 1024 * 1024;
 const maxConcurrentIconCaches = clampInteger(process.env.ICON_CACHE_CONCURRENCY, 1, 32, 4);
+// /insert/* is unauthenticated, so a client-supplied relevance is not evidence of anything.
+// It used to be trusted, which let one caller claim relevance 100 and permanently lock an
+// icon that no legitimate push (always 10) could ever replace.
+const desktopPushIconRelevance = 10;
+const iconConfirmationsRequired = clampInteger(process.env.ICON_CONFIRMATIONS_REQUIRED, 1, 100, 3);
+const iconProposalRetentionDays = clampInteger(process.env.ICON_PROPOSAL_RETENTION_DAYS, 1, 3650, 30);
+const submitterSalt = getOptionalEnv("SUBMITTER_SALT");
+// Table names are interpolated into the icon-promotion statements, so they are checked
+// against this set rather than taken on trust from the caller.
+const metadataTables = new Set(["metadata_games", "metadata_programs"]);
 const publicBaseUrl = getOptionalEnv("PUBLIC_BASE_URL").replace(/\/+$/, "");
 const rateLimitWindowMs = clampInteger(process.env.RATE_LIMIT_WINDOW_MS, 1000, 3600000, 60000);
 // Off unless explicitly configured. Enabling it requires knowing how many entries the
@@ -66,6 +76,11 @@ app.use(express.text({ type: ["text/plain", "application/apicalypse"], limit: "3
 app.use(express.urlencoded({ extended: false, limit: "16mb" }));
 
 void initializeDatabase();
+
+if (dbPool) {
+  // unref so a pending timer never keeps the instance alive on shutdown
+  setInterval(() => void pruneIconProposals().catch(() => {}), 6 * 60 * 60 * 1000).unref();
+}
 
 app.get("/health", (req, res) => {
   res.json({
@@ -163,7 +178,7 @@ app.get("/get/program", handleAsync(async (req, res) => {
 
 app.post("/insert/main", handleAsync(async (req, res) => {
   const records = parsePostedJsonArray(req.body && req.body.data, "game list");
-  const inserted = await upsertMetadataGames(records);
+  const inserted = await upsertMetadataGames(records, submitterFingerprint(req));
 
   res.json({
     ok: true,
@@ -173,7 +188,7 @@ app.post("/insert/main", handleAsync(async (req, res) => {
 
 app.post("/insert/program", handleAsync(async (req, res) => {
   const records = parsePostedJsonArray(req.body && req.body.data, "program list");
-  const inserted = await upsertMetadataPrograms(records);
+  const inserted = await upsertMetadataPrograms(records, submitterFingerprint(req));
 
   res.json({
     ok: true,
@@ -290,6 +305,47 @@ function clientAddress(req) {
   return req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "unknown";
 }
 
+// Identifies the source of a submission for confirmation counting. Stored as a keyed hash
+// rather than an address: this is abuse accounting, and there is no reason to keep a table
+// of who looked up which games.
+function submitterFingerprint(req) {
+  return crypto
+    .createHmac("sha256", submitterSalt)
+    .update(identityScopeForAddress(clientAddress(req)))
+    .digest("hex")
+    .slice(0, 32);
+}
+
+// IPv6 subscribers are normally handed a whole /64 and rotate the host half (privacy
+// extensions), so fingerprinting a full v6 address would let one machine supply an endless
+// stream of distinct "submitters" and confirm its own proposals. Collapse to the /64.
+function identityScopeForAddress(address) {
+  const cleaned = String(address).replace(/^\[|\]$/g, "").split("%")[0];
+
+  if (!cleaned.includes(":")) {
+    return cleaned;
+  }
+
+  const mapped = cleaned.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (mapped) {
+    return mapped[1];
+  }
+
+  return expandIpv6(cleaned).slice(0, 4).join(":");
+}
+
+function expandIpv6(address) {
+  const [head, tail] = address.split("::");
+  const headGroups = head ? head.split(":").filter(Boolean) : [];
+  const tailGroups = tail !== undefined && tail ? tail.split(":").filter(Boolean) : [];
+  const missing = 8 - headGroups.length - tailGroups.length;
+  const filler = address.includes("::") ? new Array(Math.max(0, missing)).fill("0") : [];
+
+  return [...headGroups, ...filler, ...tailGroups]
+    .slice(0, 8)
+    .map((group) => group.toLowerCase().padStart(4, "0"));
+}
+
 function handleAsync(handler) {
   return (req, res, next) => {
     Promise.resolve(handler(req, res, next)).catch(next);
@@ -390,12 +446,18 @@ function createDatabasePool() {
   const user = getOptionalEnv("POSTGRES_USER");
   const password = getOptionalEnv("POSTGRES_PASSWORD");
 
-  if (!connectionName || !database || !user || !password) {
+  const host = getOptionalEnv("POSTGRES_HOST");
+
+  if (!database || !user || !password || (!connectionName && !host)) {
     return null;
   }
 
   return new Pool({
-    host: `/cloudsql/${connectionName}`,
+    // Cloud SQL connects over its unix socket; POSTGRES_HOST is the escape hatch for
+    // running against a plain Postgres locally.
+    ...(connectionName
+      ? { host: `/cloudsql/${connectionName}` }
+      : { host, port: clampInteger(process.env.POSTGRES_PORT, 1, 65535, 5432) }),
     database,
     user,
     password,
@@ -465,13 +527,32 @@ async function initializeDatabase() {
           updated_at timestamptz not null default now()
         );
 
+        -- Pending icon changes to rows that already have an icon. /insert/* is public, so a
+        -- replacement is treated as a proposal and only applied once enough distinct
+        -- submitters independently send the same one.
+        create table if not exists metadata_icon_proposals (
+          entity_type text not null,
+          normalized_name text not null,
+          iconlink text not null,
+          submitter_hash text not null,
+          created_at timestamptz not null default now(),
+          primary key (entity_type, normalized_name, iconlink, submitter_hash)
+        );
+
         create index if not exists idx_metadata_games_falsepositive on metadata_games(falsepositive);
         create index if not exists idx_metadata_programs_falsepositive on metadata_programs(falsepositive);
         create index if not exists idx_custom_search_cache_expires_at on custom_search_cache(expires_at);
         create index if not exists idx_igdb_search_cache_expires_at on igdb_search_cache(expires_at);
+        create index if not exists idx_icon_proposals_created_at on metadata_icon_proposals(created_at);
 
         alter table metadata_games add column if not exists cached_icon_path text;
         alter table metadata_programs add column if not exists cached_icon_path text;
+
+        -- Who contributed the icon a row currently carries. Null means nobody owns it:
+        -- either it predates this column or it was promoted by consensus, and in both
+        -- cases every future change needs confirmation.
+        alter table metadata_games add column if not exists icon_submitter_hash text;
+        alter table metadata_programs add column if not exists icon_submitter_hash text;
       `);
       return true;
     } finally {
@@ -484,6 +565,18 @@ async function initializeDatabase() {
   });
 
   return databaseReadyPromise;
+}
+
+// Proposals that never reach the confirmation threshold would otherwise accumulate for
+// every icon anyone ever disagreed about.
+async function pruneIconProposals() {
+  await withDatabase(
+    (client) => client.query(
+      `delete from metadata_icon_proposals where created_at < now() - ($1 || ' days')::interval`,
+      [String(iconProposalRetentionDays)]
+    ),
+    null
+  );
 }
 
 async function withDatabase(callback, fallbackValue) {
@@ -604,7 +697,7 @@ async function getMetadataProgram(programName, falsePositive) {
   }, null);
 }
 
-async function upsertMetadataGames(records) {
+async function upsertMetadataGames(records, submitter) {
   if (!Array.isArray(records) || records.length === 0) {
     return 0;
   }
@@ -620,44 +713,33 @@ async function upsertMetadataGames(records) {
       const normalized = normalizeName(gameName);
       const iconLink = String(record.iconLink || record.iconlink || "").trim();
       const exeName = String(record.exeName || record.exename || "").trim();
-      const iconRelevance = clampInteger(record.iconRelevance || record.iconrelevance, 0, 100, 0);
 
-      await client.query(
+      // An icon is adopted here only when the row has none. Replacing one that is already
+      // established goes through reconcileIconSubmission, so a single unauthenticated
+      // caller cannot change what every user sees.
+      const stored = await client.query(
         `
           insert into metadata_games
-            (normalized_name, gamename, canonical_name, iconlink, exename, falsepositive, iconrelevance, source, updated_at)
-          values ($1, $2, $2, nullif($3, ''), nullif($4, ''), false, $5, 'desktop-push', now())
+            (normalized_name, gamename, canonical_name, iconlink, icon_submitter_hash, exename, falsepositive, iconrelevance, source, updated_at)
+          values ($1, $2, $2, nullif($3, ''), case when nullif($3, '') is null then null else $5 end, nullif($4, ''), false, $6, 'desktop-push', now())
           on conflict (normalized_name) do update
           set gamename = excluded.gamename,
               canonical_name = coalesce(metadata_games.canonical_name, excluded.canonical_name),
-              -- >= for iconlink but > for iconrelevance is deliberate, carried over from the
-              -- legacy MySQL upsert in FuzionDock/SQL/SQLManager.cs: the client always pushes
-              -- relevance 10, so >= is what lets a re-push refresh a stale or broken icon.
-              iconlink = case
-                when excluded.iconrelevance >= metadata_games.iconrelevance and excluded.iconlink is not null then excluded.iconlink
-                else metadata_games.iconlink
+              iconlink = coalesce(metadata_games.iconlink, excluded.iconlink),
+              icon_submitter_hash = case
+                when metadata_games.iconlink is null then excluded.icon_submitter_hash
+                else metadata_games.icon_submitter_hash
               end,
-              -- the cached object is keyed by the source URL, so a replaced iconlink must
-              -- drop the old cached_icon_path or /get/main keeps serving the previous image
-              cached_icon_path = case
-                when excluded.iconrelevance >= metadata_games.iconrelevance
-                  and excluded.iconlink is not null
-                  and excluded.iconlink is distinct from metadata_games.iconlink then null
-                else metadata_games.cached_icon_path
-              end,
-              exename = case
-                when excluded.exename is not null then excluded.exename
-                else metadata_games.exename
-              end,
-              iconrelevance = case
-                when excluded.iconrelevance > metadata_games.iconrelevance and excluded.iconlink is not null then excluded.iconrelevance
-                else metadata_games.iconrelevance
-              end,
+              exename = coalesce(excluded.exename, metadata_games.exename),
+              iconrelevance = greatest(metadata_games.iconrelevance, excluded.iconrelevance),
               source = 'desktop-push',
               updated_at = now()
+          returning iconlink, icon_submitter_hash
         `,
-        [normalized, gameName, iconLink || null, exeName || null, iconRelevance]
+        [normalized, gameName, iconLink || null, exeName || null, submitter, desktopPushIconRelevance]
       );
+
+      await reconcileIconSubmission(client, "metadata_games", "game", normalized, iconLink, submitter, stored.rows[0]);
       inserted += 1;
     }
 
@@ -665,7 +747,61 @@ async function upsertMetadataGames(records) {
   }, 0);
 }
 
-async function upsertMetadataPrograms(records) {
+// Applies an icon change to a row that already has one. The contributor who established the
+// current icon may replace it outright - that keeps the ordinary "my icon got better" path
+// working for titles only one person has. Everyone else is casting a vote, and the change
+// lands only once ICON_CONFIRMATIONS_REQUIRED distinct submitters send the same URL.
+async function reconcileIconSubmission(client, table, entityType, normalizedName, iconLink, submitter, stored) {
+  if (!iconLink || !stored || !stored.iconlink || stored.iconlink === iconLink) {
+    return;
+  }
+
+  if (!metadataTables.has(table)) {
+    throw new Error(`Refusing to update unknown table: ${table}`);
+  }
+
+  if (stored.icon_submitter_hash && stored.icon_submitter_hash === submitter) {
+    await client.query(
+      `update ${table} set iconlink = $1, cached_icon_path = null, updated_at = now()
+       where normalized_name = $2`,
+      [iconLink, normalizedName]
+    );
+    return;
+  }
+
+  await client.query(
+    `insert into metadata_icon_proposals (entity_type, normalized_name, iconlink, submitter_hash)
+     values ($1, $2, $3, $4)
+     on conflict do nothing`,
+    [entityType, normalizedName, iconLink, submitter]
+  );
+
+  const tally = await client.query(
+    `select count(distinct submitter_hash)::int as confirmations
+     from metadata_icon_proposals
+     where entity_type = $1 and normalized_name = $2 and iconlink = $3`,
+    [entityType, normalizedName, iconLink]
+  );
+
+  if ((tally.rows[0] && tally.rows[0].confirmations) < iconConfirmationsRequired) {
+    return;
+  }
+
+  // Promoted icons are left unowned, so the next change needs fresh confirmation rather
+  // than inheriting the last voter's ability to overwrite at will.
+  await client.query(
+    `update ${table} set iconlink = $1, cached_icon_path = null, icon_submitter_hash = null, updated_at = now()
+     where normalized_name = $2`,
+    [iconLink, normalizedName]
+  );
+
+  await client.query(
+    `delete from metadata_icon_proposals where entity_type = $1 and normalized_name = $2`,
+    [entityType, normalizedName]
+  );
+}
+
+async function upsertMetadataPrograms(records, submitter) {
   if (!Array.isArray(records) || records.length === 0) {
     return 0;
   }
@@ -682,25 +818,27 @@ async function upsertMetadataPrograms(records) {
       const iconLink = String(record.iconLink || record.iconlink || "").trim();
       const exeName = String(record.exeName || record.exename || "").trim();
 
-      await client.query(
+      // Same rule as upsertMetadataGames: adopt an icon only when there is none.
+      const stored = await client.query(
         `
           insert into metadata_programs
-            (normalized_name, name, iconlink, exename, falsepositive, updated_at)
-          values ($1, $2, nullif($3, ''), nullif($4, ''), false, now())
+            (normalized_name, name, iconlink, icon_submitter_hash, exename, falsepositive, updated_at)
+          values ($1, $2, nullif($3, ''), case when nullif($3, '') is null then null else $5 end, nullif($4, ''), false, now())
           on conflict (normalized_name) do update
           set name = excluded.name,
-              iconlink = coalesce(excluded.iconlink, metadata_programs.iconlink),
-              -- see upsertMetadataGames: a replaced iconlink invalidates the cached object
-              cached_icon_path = case
-                when excluded.iconlink is not null
-                  and excluded.iconlink is distinct from metadata_programs.iconlink then null
-                else metadata_programs.cached_icon_path
+              iconlink = coalesce(metadata_programs.iconlink, excluded.iconlink),
+              icon_submitter_hash = case
+                when metadata_programs.iconlink is null then excluded.icon_submitter_hash
+                else metadata_programs.icon_submitter_hash
               end,
               exename = coalesce(excluded.exename, metadata_programs.exename),
               updated_at = now()
+          returning iconlink, icon_submitter_hash
         `,
-        [normalized, name, iconLink || null, exeName || null]
+        [normalized, name, iconLink || null, exeName || null, submitter]
       );
+
+      await reconcileIconSubmission(client, "metadata_programs", "program", normalized, iconLink, submitter, stored.rows[0]);
       inserted += 1;
     }
 
