@@ -38,7 +38,8 @@ namespace Fuzion
         public static string igdbProxyURL = GetConfiguredValue(
             "IGDB_PROXY_URL",
             localSecrets?.IgdbProxyUrl,
-            "IGDBProxyURL.txt");
+            "IGDBProxyURL.txt",
+            "IgdbProxyUrl");
 
         public static string dbPassword = GetConfiguredValue(
             "DB_PASSWORD",

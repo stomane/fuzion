@@ -76,7 +76,7 @@ Those values are not required for the project to build, but some runtime feature
 
 For local development, Fuzion now also supports an ignored file at [FuzionDock/local.secrets.example.json](FuzionDock/local.secrets.example.json): create `FuzionDock/local.secrets.json` next to the project file and Debug builds will copy it to the output directory automatically. Release and Store packaging builds do not copy that file, so local secrets do not get embedded into a submission by accident. Environment variables take precedence over the local file.
 
-For published builds, safe non-secret defaults can also be shipped in [FuzionDock/App.config](FuzionDock/App.config) as `GeminiProxyUrl` and `GoogleSearchProxyUrl`. The app resolves configuration in this order: environment variable, `local.secrets.json`, then `App.config`, then any legacy text-file fallback.
+For published builds, safe non-secret defaults can also be shipped in [FuzionDock/App.config](FuzionDock/App.config) as `GeminiProxyUrl`, `GoogleSearchProxyUrl`, and `IgdbProxyUrl`. The app resolves configuration in this order: environment variable, `local.secrets.json`, then `App.config`, then any legacy text-file fallback.
 
 The current app uses:
 
@@ -109,6 +109,16 @@ Google Custom Search (icons) setup for this repo:
 3. Combine both values as `<API_KEY>&cx=<SEARCH_ENGINE_ID>` and put that whole string in `FuzionDock/local.secrets.json` as `GoogleSearchApiKey`, or set `GOOGLE_SEARCH_API_KEY` in your environment the same way. The code appends this value directly as the request's `key=` parameter, so both parts need to be combined into one string.
 
 For a published build that should work for all users, do not ship the Custom Search key or engine ID in the client. Instead, point `GoogleSearchProxyUrl` in [FuzionDock/App.config](FuzionDock/App.config) at your backend. The app will send the same query parameters it already uses for Google Custom Search and expects the same JSON shape back, especially `items[].link`.
+
+IGDB setup for this repo:
+
+1. Create a Twitch developer application for the backend and use a confidential client type.
+2. Keep the Twitch client ID and client secret server-side only.
+3. Point `IgdbProxyUrl` in [FuzionDock/App.config](FuzionDock/App.config) at your backend base URL.
+
+The current desktop client calls the proxy as `GET /production/v4/games?...`, and the backend translates those query parameters into IGDB's POST query format before calling Twitch / IGDB with a server-side app access token.
+
+The backend service for the official app now lives in [FuzionBackend/package.json](FuzionBackend/package.json). It is intended for Cloud Run and uses Secret Manager for the live Gemini, IGDB, and Custom Search credentials.
 
 If the API keys are missing, Fuzion now starts in a plain offline mode: local launcher detection and local icons still work, while Google image search and IGDB lookups are skipped.
 
