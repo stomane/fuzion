@@ -120,6 +120,15 @@ The current desktop client calls the proxy as `GET /production/v4/games?...`, an
 
 The backend service for the official app now lives in [FuzionBackend/package.json](FuzionBackend/package.json). It is intended for Cloud Run and uses Secret Manager for the live Gemini, IGDB, and Custom Search credentials.
 
+`FuzionBackend` also supports an optional PostgreSQL metadata cache for confirmed game/program names and cached upstream responses. When `CLOUD_SQL_CONNECTION_NAME`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` are set, the service automatically initializes the cache tables and serves the old Fuzion metadata endpoints:
+
+- `GET /get/main?gamename=...&falsepositive=0`
+- `GET /get/program?programname=...&falsepositive=0`
+- `POST /insert/main`
+- `POST /insert/program`
+
+See [FuzionBackend/.env.example](FuzionBackend/.env.example) for the backend environment contract.
+
 If the API keys are missing, Fuzion now starts in a plain offline mode: local launcher detection and local icons still work, while Google image search and IGDB lookups are skipped.
 
 ## Publishing To The Microsoft Store

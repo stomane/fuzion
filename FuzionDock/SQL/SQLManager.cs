@@ -273,8 +273,7 @@ namespace Fuzion.SQL
         {
             try
             {
-                //return FuzionDB.GameExistsInDatabase(gameName);
-                return false; // Fallback when FuzionDB is unavailable
+                return FuzionDB.GameExistsInDatabase(gameName);
             }
             catch (Exception) // if it fails, try to reach the old web db
             {
@@ -321,8 +320,7 @@ namespace Fuzion.SQL
         {
             try
             {
-                //return FuzionDB.ProgramExistsInDatabase(name);
-                return false; // Fallback when FuzionDB is unavailable
+                return FuzionDB.ProgramExistsInDatabase(name);
             }
             catch (Exception) //try the old web db if it fails
             {
@@ -370,8 +368,7 @@ namespace Fuzion.SQL
 
             try
             {
-                //return FuzionDB.GetIconTuple(name);
-                return result; // Fallback to empty result
+                return await Task.FromResult(FuzionDB.GetIconTuple(name)).ConfigureAwait(false);
             }
             catch (Exception) // check web db if fuzion db fails
             {

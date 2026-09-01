@@ -74,6 +74,7 @@ namespace Fuzion
         public static bool HasGeminiApiKey => HasGeminiAccess;
         public static bool UseGoogleSearchProxy => !string.IsNullOrWhiteSpace(gSearchProxyUrl);
         public static bool UseGeminiProxy => !string.IsNullOrWhiteSpace(geminiProxyUrl);
+        public static string BackendBaseUrl => string.IsNullOrWhiteSpace(igdbProxyURL) ? string.Empty : igdbProxyURL.Trim().TrimEnd('/');
         public static string GeminiModel => string.IsNullOrWhiteSpace(geminiModel) ? "gemini-3.6-flash" : geminiModel.Trim();
 
         // Sentry DSNs are safe to ship in client code (they only permit sending events into

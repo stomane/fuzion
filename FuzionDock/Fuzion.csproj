@@ -215,7 +215,7 @@
     <Compile Include="SettingsManager\GeneralSettings.cs" />
     <Compile Include="SQL\DatabaseManipulation.cs" />
     <Compile Include="SQL\ExceptionReporting.cs" />
-    <!-- <Compile Include="SQL\FuzionDB.cs" /> -->
+    <Compile Include="SQL\FuzionDB.cs" />
 
     <Compile Include="UniversalPlatform\General.cs" />
     <Compile Include="UniversalPlatform\OnUpdate.cs" />
