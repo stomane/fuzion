@@ -13,6 +13,8 @@ Here are videos showing some of its features:
 - [Feature Overview 5](https://www.youtube.com/watch?v=ta0jqpnwblw)
 - [Feature Overview 6](https://www.youtube.com/watch?v=puYv7PPIAOk)
 
+Note: Not all features are available right now but they will slowly be re-added with the next updates.
+
 ## Current Status
 
 The Microsoft Store is the official place to get Fuzion:
