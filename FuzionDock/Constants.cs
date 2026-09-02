@@ -14,7 +14,6 @@ namespace Fuzion
             public string GoogleSearchApiKey { get; set; }
             public string GoogleSearchProxyUrl { get; set; }
             public string IgdbProxyUrl { get; set; }
-            public string DbPassword { get; set; }
             public string SteamApiKey { get; set; }
             public string GeminiApiKey { get; set; }
             public string GeminiProxyUrl { get; set; }
@@ -40,11 +39,6 @@ namespace Fuzion
             localSecrets?.IgdbProxyUrl,
             "IGDBProxyURL.txt",
             "IgdbProxyUrl");
-
-        public static string dbPassword = GetConfiguredValue(
-            "DB_PASSWORD",
-            localSecrets?.DbPassword,
-            "dbPassword.txt");
 
         public static string geminiApiKey = GetConfiguredValue(
             "GEMINI_API_KEY",

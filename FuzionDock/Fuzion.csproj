@@ -213,8 +213,6 @@
     <Compile Include="Scanner\Rescan.cs" />
     <Compile Include="SettingsManager\Blacklist.cs" />
     <Compile Include="SettingsManager\GeneralSettings.cs" />
-    <Compile Include="SQL\DatabaseManipulation.cs" />
-    <Compile Include="SQL\ExceptionReporting.cs" />
     <Compile Include="SQL\FuzionDB.cs" />
 
     <Compile Include="UniversalPlatform\General.cs" />
@@ -510,9 +508,6 @@
       <Version>2.2.0</Version>
     </PackageReference>
     <!-- Removed Microsoft.Windows.SDK.Contracts -->
-    <PackageReference Include="MySql.Data">
-      <Version>8.0.28</Version>
-    </PackageReference>
     <PackageReference Include="Newtonsoft.Json">
       <Version>13.0.1</Version>
     </PackageReference>

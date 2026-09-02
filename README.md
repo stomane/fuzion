@@ -38,7 +38,7 @@ Every key below is optional - games can always be added manually from the UI reg
 - A **Gemini API key** (from Google AI Studio) - classifies detected programs into actual games via an LLM.
 - A **Google Custom Search API key** - fetches game icons/artwork automatically.
 
-An IGDB proxy is also supported as an alternative/additional way to classify games, and the legacy remote database and Steam key are optional fallbacks that can safely be left unset.
+Game classification and metadata both go through the Fuzion backend, which fronts IGDB and Gemini and caches the results. The Steam key is an optional extra that can safely be left unset.
 
 ## Running In VS Code
 
@@ -65,7 +65,6 @@ The app reads configuration from environment variables now. The main ones curren
 - `GOOGLE_SEARCH_API_KEY`
 - `GOOGLE_SEARCH_PROXY_URL`
 - `IGDB_PROXY_URL`
-- `DB_PASSWORD`
 - `GEMINI_API_KEY`
 - `GEMINI_PROXY_URL`
 - `REDDIT_CLIENT_ID`
@@ -83,7 +82,6 @@ The current app uses:
 - `GoogleSearchApiKey` for online icon and executable lookup
 - `GoogleSearchProxyUrl` for a release-safe online icon/executable lookup backend
 - `IgdbProxyUrl` for IGDB-backed game detection
-- `DbPassword` for the legacy remote database path
 - `GeminiApiKey` for batched LLM-based game classification fallback
 - `GeminiProxyUrl` for a release-safe Gemini backend
 - `GeminiModel` to override the default `gemini-3.6-flash`

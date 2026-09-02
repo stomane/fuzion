@@ -89,7 +89,6 @@ namespace Fuzion.Debug
         private static void MessageBoxOn_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
             //System.Windows.Forms.MessageBox.Show(e.ExceptionObject.ToString());
-            //ExceptionReporting.Report(e.ExceptionObject.ToString());
             Native.ThreadedHook.DisableAllHooks();
             // Crash reporting to Sentry is intentionally not wired up yet - usage tracking
             // (Release Health sessions) is opt-out-by-default, but actual crash/error capture
