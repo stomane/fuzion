@@ -76,6 +76,19 @@ app.disable("x-powered-by");
 // client can set itself. Rate limiting keys off clientAddress() instead, which reads the
 // rightmost entry - the one appended by the infrastructure in front of us.
 app.set("trust proxy", false);
+// Opt-in access log. Off by default so it costs nothing in production, but invaluable
+// when tracing what the desktop client actually asked for and in what order.
+if (getOptionalEnv("REQUEST_LOG")) {
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on("finish", () => {
+      console.log("[req] " + req.method + " " + req.originalUrl.slice(0, 140) +
+        " -> " + res.statusCode + " " + (Date.now() - startedAt) + "ms");
+    });
+    next();
+  });
+}
+
 app.use(express.json({ limit: "256kb" }));
 app.use(express.text({ type: ["text/plain", "application/apicalypse"], limit: "32kb" }));
 // The desktop client pushes its whole library in a single form-urlencoded POST, so this
@@ -594,10 +607,14 @@ async function initializeDatabase() {
         create table if not exists program_verdict_cache (
           cache_key text primary key,
           detected_name text not null,
+          publisher text,
+          launcher text,
+          exe_name text,
           is_game boolean not null,
           canonical_title text,
           source text not null,
           model text,
+          evidence jsonb,
           expires_at timestamptz not null,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
@@ -1013,36 +1030,55 @@ async function storeVerdicts(verdicts, model) {
 
   const keys = [];
   const names = [];
+  const publishers = [];
+  const launchers = [];
+  const exeNames = [];
   const isGames = [];
   const titles = [];
   const sources = [];
+  const evidence = [];
 
   for (const [cacheKey, verdict] of verdicts) {
     keys.push(cacheKey);
     names.push(verdict.detectedName);
+    // The identifying fields are stored alongside the verdict, not just folded into the
+    // hash: two programs can share a name and get opposite verdicts, and the row has to say
+    // which one it is. "Parsec" by Parsec Cloud is a different row from a game of that name.
+    publishers.push(verdict.publisher || null);
+    launchers.push(verdict.launcher || null);
+    exeNames.push(verdict.exeName || null);
     isGames.push(verdict.isGame);
     titles.push(verdict.canonicalTitle || null);
     sources.push(verdict.source);
+    evidence.push(verdict.evidence ? JSON.stringify(verdict.evidence) : null);
   }
 
   await withDatabase(
     (client) => client.query(
       `insert into program_verdict_cache
-         (cache_key, detected_name, is_game, canonical_title, source, model, expires_at, updated_at)
-       select key, name, is_game, nullif(title, ''), src,
-              case when src = 'gemini' then $6::text else null end,
-              now() + ($7 || ' seconds')::interval, now()
-       from unnest($1::text[], $2::text[], $3::boolean[], $4::text[], $5::text[])
-         as t(key, name, is_game, title, src)
+         (cache_key, detected_name, publisher, launcher, exe_name, is_game, canonical_title,
+          source, model, evidence, expires_at, updated_at)
+       select key, name, pub, launcher, exe, is_game, nullif(title, ''), src,
+              case when src = 'gemini' then $10::text else null end,
+              ev::jsonb,
+              now() + ($11 || ' seconds')::interval, now()
+       from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[],
+                   $6::boolean[], $7::text[], $8::text[], $9::text[])
+         as t(key, name, pub, launcher, exe, is_game, title, src, ev)
        on conflict (cache_key) do update
        set is_game = excluded.is_game,
            canonical_title = excluded.canonical_title,
            detected_name = excluded.detected_name,
+           publisher = excluded.publisher,
+           launcher = excluded.launcher,
+           exe_name = excluded.exe_name,
            source = excluded.source,
            model = excluded.model,
+           evidence = excluded.evidence,
            expires_at = excluded.expires_at,
            updated_at = now()`,
-      [keys, names, isGames, titles, sources, model, String(classificationCacheTtlSeconds)]
+      [keys, names, publishers, launchers, exeNames, isGames, titles, sources, evidence,
+       model, String(classificationCacheTtlSeconds)]
     ),
     null
   );
@@ -1071,17 +1107,30 @@ async function resolveWithIgdb(items) {
     }
 
     try {
-      const matched = await igdbHasMatch(item.detectedName);
-      if (matched) {
+      const candidate = await findIgdbCandidate(item.detectedName);
+
+      if (candidate && companyCorroborates(item.publisher, candidate.companies)) {
         verdicts.set(item.cacheKey, {
           detectedName: item.detectedName,
+          publisher: item.publisher,
+          launcher: item.launcher,
+          exeName: item.exeName,
           isGame: true,
-          canonicalTitle: matched,
-          source: "igdb"
+          canonicalTitle: candidate.name,
+          source: "igdb",
+          evidence: {
+            igdbName: candidate.name,
+            year: candidate.year || null,
+            companies: candidate.companies.map((c) => c.name),
+            matchedPublisher: item.publisher
+          }
         });
-      } else {
-        remaining.push(item);
+        continue;
       }
+
+      // A name match nobody corroborated is not a verdict - "Parsec" is both a 1982 TI-99
+      // game and a remote-desktop tool - so it goes to Gemini like any other unresolved item.
+      remaining.push(item);
     } catch (error) {
       if (error && error.rateLimited) {
         abandoned = true;
@@ -1093,8 +1142,8 @@ async function resolveWithIgdb(items) {
   return { verdicts, remaining };
 }
 
-async function igdbHasMatch(name) {
-  const query = `fields name; search "${escapeIgdbString(name)}"; limit 5;`;
+async function findIgdbCandidate(name) {
+  const query = `fields name,first_release_date,involved_companies.company.name,involved_companies.publisher,involved_companies.developer; search "${escapeIgdbString(name)}"; limit 10;`;
   const cacheKey = hashCacheKey("igdb-games", query);
   const cached = await getCachedJson("igdb_search_cache", cacheKey);
 
@@ -1121,23 +1170,119 @@ async function igdbHasMatch(name) {
   return bestIgdbMatch(name, JSON.parse(payloadText));
 }
 
-// IGDB search is fuzzy and will answer almost anything, so a hit only counts when the
-// returned title actually resembles what we asked about.
+// IGDB search is fuzzy and will answer almost anything, so only a title that actually
+// resembles the query counts. Exact match wins; otherwise the IGDB title has to be the
+// whole of the detected name once decoration like a trademark symbol is stripped. The
+// looser arm is only safe because a match still has to be corroborated by the publisher.
 function bestIgdbMatch(name, payload) {
   if (!Array.isArray(payload)) {
-    return "";
+    return null;
   }
 
-  const wanted = normalizeName(name);
+  const wanted = normalizeTitle(name);
+  let fallback = null;
 
   for (const entry of payload) {
-    const candidate = entry && typeof entry.name === "string" ? entry.name : "";
-    if (candidate && normalizeName(candidate) === wanted) {
-      return candidate;
+    const candidateName = entry && typeof entry.name === "string" ? entry.name : "";
+    if (!candidateName) {
+      continue;
+    }
+
+    const normalized = normalizeTitle(candidateName);
+    const candidate = {
+      name: candidateName,
+      year: entry.first_release_date ? new Date(entry.first_release_date * 1000).getUTCFullYear() : null,
+      companies: extractIgdbCompanies(entry)
+    };
+
+    if (normalized === wanted) {
+      // Prefer an exact match that actually carries company data, since a match with no
+      // companies can never be corroborated.
+      if (candidate.companies.length > 0) {
+        return candidate;
+      }
+      fallback = fallback || candidate;
     }
   }
 
-  return "";
+  return fallback;
+}
+
+function extractIgdbCompanies(entry) {
+  const involved = Array.isArray(entry.involved_companies) ? entry.involved_companies : [];
+
+  return involved
+    .map((row) => ({
+      name: row && row.company && typeof row.company.name === "string" ? row.company.name : "",
+      publisher: !!(row && row.publisher),
+      developer: !!(row && row.developer)
+    }))
+    .filter((company) => company.name);
+}
+
+// Installed metadata names the developer about as often as the publisher (Graveyard Keeper
+// reports "Lazy Bear Games", which IGDB records as developer with tinyBuild publishing), so
+// both roles count.
+function companyCorroborates(installedPublisher, companies) {
+  const installed = normalizeCompanyName(installedPublisher);
+  if (!installed || !Array.isArray(companies) || companies.length === 0) {
+    return false;
+  }
+
+  const installedTokens = new Set(installed.split(" ").filter(Boolean));
+  if (installedTokens.size === 0) {
+    return false;
+  }
+
+  for (const company of companies) {
+    const candidateTokens = new Set(normalizeCompanyName(company.name).split(" ").filter(Boolean));
+    if (candidateTokens.size === 0) {
+      continue;
+    }
+
+    if (isTokenSubset(installedTokens, candidateTokens) || isTokenSubset(candidateTokens, installedTokens)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isTokenSubset(inner, outer) {
+  for (const token of inner) {
+    if (!outer.has(token)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Drops legal-entity noise so "Keen Games GmbH" and "Keen Games" compare equal.
+const companySuffixes = new Set([
+  "inc", "incorporated", "llc", "ltd", "limited", "gmbh", "co", "corp", "corporation",
+  "sa", "ab", "oy", "as", "bv", "nv", "plc", "kk", "srl", "spa", "pty", "pte", "sarl"
+]);
+
+function normalizeCompanyName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((token) => token && !companySuffixes.has(token))
+    .join(" ")
+    .trim();
+}
+
+// Titles carry decoration that never appears in IGDB: trademark marks, edition suffixes,
+// punctuation. Normalised separately from company names, which need different handling.
+function normalizeTitle(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[™®©]/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/s+/g, " ");
 }
 
 // Asks Gemini about the items that missed cache, in batches. A batch that fails leaves its
@@ -1164,6 +1309,9 @@ async function classifyWithGemini(items, model) {
         // scan does not pay to ask again.
         verdicts.set(item.cacheKey, {
           detectedName: item.detectedName,
+          publisher: item.publisher,
+          launcher: item.launcher,
+          exeName: item.exeName,
           isGame: !!match,
           canonicalTitle: match || "",
           source: "gemini"
@@ -1208,9 +1356,22 @@ function buildClassificationRequest(batch) {
   });
 
   return {
+    // Items reach this prompt by several routes - no IGDB match, an uncorroborated one, IGDB
+    // rate-limited, or the stage skipped entirely - so it cannot lean on IGDB having run.
+    // Everything needed to separate a program from the game sharing its name comes from the
+    // machine's own metadata, which is sent with every item.
     systemInstruction: {
       parts: [{
-        text: "Classify Windows programs and return only actual video games from the provided list. Exclude launchers, redistributables, tools, editors, drivers, anti-cheat, mods, dedicated servers, benchmarks, installers, and anything uncertain."
+        text: [
+          "Classify Windows programs and return only actual video games from the provided list.",
+          "Exclude launchers, redistributables, tools, editors, drivers, anti-cheat, mods,",
+          "dedicated servers, benchmarks, installers, and anything uncertain.",
+          "Some installed programs share their name with a video game. Decide which one is",
+          "actually installed using the publisher, launcher and executable given for each item,",
+          "not the name alone. A program whose publisher is a software or services company, or",
+          "that is installed standalone rather than through a game launcher, is not the game",
+          "that happens to share its name."
+        ].join(" ")
       }]
     },
     contents: [{ role: "user", parts: [{ text: lines.join("\n") }] }],
