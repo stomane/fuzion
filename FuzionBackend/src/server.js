@@ -10,6 +10,15 @@ const port = parseInt(process.env.PORT || "8080", 10);
 const defaultGeminiModel = process.env.GEMINI_DEFAULT_MODEL || "gemini-3.5-flash-lite";
 const customSearchCacheTtlSeconds = parseInt(process.env.CUSTOM_SEARCH_CACHE_TTL_SECONDS || "604800", 10);
 const igdbCacheTtlSeconds = parseInt(process.env.IGDB_CACHE_TTL_SECONDS || "604800", 10);
+// Whether a program is a game barely changes, so this is cached far longer than the search
+// caches - the whole point is that a rescan never reaches Gemini again.
+const classificationCacheTtlSeconds = clampInteger(process.env.CLASSIFICATION_CACHE_TTL_SECONDS, 1, 31536000, 2592000);
+const classificationBatchSize = clampInteger(process.env.CLASSIFICATION_BATCH_SIZE, 1, 200, 75);
+const maxClassificationItems = clampInteger(process.env.CLASSIFICATION_MAX_ITEMS, 1, 5000, 500);
+// Wall-clock ceiling for the IGDB stage of a single classify request. IGDB is queried one
+// title at a time and rate-limits hard, so it gets a slice of the request rather than the
+// whole thing; whatever it does not reach in time goes to Gemini.
+const igdbResolveBudgetMs = clampInteger(process.env.IGDB_RESOLVE_BUDGET_MS, 0, 120000, 15000);
 const assetBucketName = getOptionalEnv("ASSET_BUCKET");
 const iconFetchTimeoutMs = clampInteger(process.env.ICON_FETCH_TIMEOUT_MS, 1000, 60000, 10000);
 const maxIconBytes = 8 * 1024 * 1024;
@@ -193,6 +202,64 @@ app.post("/insert/program", handleAsync(async (req, res) => {
   res.json({
     ok: true,
     inserted
+  });
+}));
+
+// Classifies programs as games, answering from the cache wherever possible and asking
+// Gemini only about the remainder. Items with no verdict - a batch that failed, or Gemini
+// being unreachable - come back in `unresolved` rather than as a negative, so the caller can
+// fall back to its other checks instead of recording "not a game" on our say-so.
+app.post("/classify/programs", rateLimit(), handleAsync(async (req, res) => {
+  const items = normalizeClassificationItems(req.body && req.body.items);
+
+  if (items.length === 0) {
+    res.json({
+      ok: true,
+      results: [],
+      unresolved: [],
+      stats: { total: 0, fromCache: 0, fromIgdb: 0, fromGemini: 0, unresolved: 0 }
+    });
+    return;
+  }
+
+  const model = resolveGeminiModel(typeof req.query.model === "string" ? req.query.model : "");
+
+  // Stage 1: our own cache answers whatever it can, for free.
+  const cached = await getCachedVerdicts(items);
+  const misses = items.filter((item) => !cached.has(item.cacheKey));
+
+  // Stage 2: IGDB confirms games it recognises.
+  const igdb = await resolveWithIgdb(misses);
+
+  // Stage 3: Gemini judges everything still unaccounted for, in batches.
+  const gemini = await classifyWithGemini(igdb.remaining, model);
+
+  const fresh = new Map([...igdb.verdicts, ...gemini.verdicts]);
+  await storeVerdicts(fresh, model);
+
+  const results = [];
+  for (const item of items) {
+    const verdict = cached.get(item.cacheKey) || fresh.get(item.cacheKey);
+    if (verdict) {
+      results.push({
+        detectedName: item.detectedName,
+        isGame: verdict.isGame,
+        canonicalTitle: verdict.isGame ? verdict.canonicalTitle || item.detectedName : null
+      });
+    }
+  }
+
+  res.json({
+    ok: true,
+    results,
+    unresolved: gemini.unresolved.map((item) => item.detectedName),
+    stats: {
+      total: items.length,
+      fromCache: cached.size,
+      fromIgdb: igdb.verdicts.size,
+      fromGemini: gemini.verdicts.size,
+      unresolved: gemini.unresolved.length
+    }
   });
 }));
 
@@ -518,6 +585,24 @@ async function initializeDatabase() {
           updated_at timestamptz not null default now()
         );
 
+        -- One row per program we have an is-game verdict for, whatever produced it, keyed by
+        -- the identifying fields rather than by prompt text: batches are composed per user,
+        -- so a prompt-level cache would miss as soon as anyone installs one new program.
+        -- IGDB verdicts live here alongside Gemini's, so a second run reaches neither.
+        -- Negatives are stored too: most entries in a library are not games, and re-asking
+        -- about those is the bulk of the spend.
+        create table if not exists program_verdict_cache (
+          cache_key text primary key,
+          detected_name text not null,
+          is_game boolean not null,
+          canonical_title text,
+          source text not null,
+          model text,
+          expires_at timestamptz not null,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
         create table if not exists igdb_search_cache (
           cache_key text primary key,
           query_text text not null,
@@ -544,6 +629,7 @@ async function initializeDatabase() {
         create index if not exists idx_custom_search_cache_expires_at on custom_search_cache(expires_at);
         create index if not exists idx_igdb_search_cache_expires_at on igdb_search_cache(expires_at);
         create index if not exists idx_icon_proposals_created_at on metadata_icon_proposals(created_at);
+        create index if not exists idx_program_verdict_expires_at on program_verdict_cache(expires_at);
 
         alter table metadata_games add column if not exists cached_icon_path text;
         alter table metadata_programs add column if not exists cached_icon_path text;
@@ -844,6 +930,357 @@ async function upsertMetadataPrograms(records, submitter) {
 
     return inserted;
   }, 0);
+}
+
+function normalizeClassificationItems(rawItems) {
+  if (!Array.isArray(rawItems)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const items = [];
+
+  for (const raw of rawItems.slice(0, maxClassificationItems)) {
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+
+    const detectedName = String(raw.detectedName || raw.detectedname || "").trim();
+    if (!detectedName) {
+      continue;
+    }
+
+    const item = {
+      detectedName,
+      publisher: String(raw.publisher || "").trim() || "unknown",
+      launcher: String(raw.launcher || "").trim() || "unknown",
+      exeName: String(raw.exeName || raw.exename || "").trim() || "unknown"
+    };
+    item.cacheKey = buildClassificationKey(item);
+
+    // A library can list the same program more than once; asking about it twice in one
+    // batch would spend tokens for an answer we already have in hand.
+    if (seen.has(item.cacheKey)) {
+      continue;
+    }
+
+    seen.add(item.cacheKey);
+    items.push(item);
+  }
+
+  return items;
+}
+
+function buildClassificationKey(item) {
+  return crypto
+    .createHash("sha256")
+    .update([item.detectedName, item.publisher, item.launcher, item.exeName].map(normalizeName).join(" "))
+    .digest("hex");
+}
+
+// Verdicts are keyed on the program's identifying fields, not on the model, so an IGDB
+// verdict and a Gemini one are interchangeable here: whichever answered first spares the
+// next run from asking either service again.
+async function getCachedVerdicts(items) {
+  const found = new Map();
+
+  await withDatabase(async (client) => {
+    const result = await client.query(
+      `select cache_key, is_game, canonical_title, source
+       from program_verdict_cache
+       where expires_at > now() and cache_key = any($1::text[])`,
+      [items.map((item) => item.cacheKey)]
+    );
+
+    for (const row of result.rows) {
+      found.set(row.cache_key, {
+        isGame: row.is_game,
+        canonicalTitle: row.canonical_title || "",
+        source: row.source
+      });
+    }
+
+    return true;
+  }, false);
+
+  return found;
+}
+
+async function storeVerdicts(verdicts, model) {
+  if (verdicts.size === 0) {
+    return;
+  }
+
+  const keys = [];
+  const names = [];
+  const isGames = [];
+  const titles = [];
+  const sources = [];
+
+  for (const [cacheKey, verdict] of verdicts) {
+    keys.push(cacheKey);
+    names.push(verdict.detectedName);
+    isGames.push(verdict.isGame);
+    titles.push(verdict.canonicalTitle || null);
+    sources.push(verdict.source);
+  }
+
+  await withDatabase(
+    (client) => client.query(
+      `insert into program_verdict_cache
+         (cache_key, detected_name, is_game, canonical_title, source, model, expires_at, updated_at)
+       select key, name, is_game, nullif(title, ''), src,
+              case when src = 'gemini' then $6::text else null end,
+              now() + ($7 || ' seconds')::interval, now()
+       from unnest($1::text[], $2::text[], $3::boolean[], $4::text[], $5::text[])
+         as t(key, name, is_game, title, src)
+       on conflict (cache_key) do update
+       set is_game = excluded.is_game,
+           canonical_title = excluded.canonical_title,
+           detected_name = excluded.detected_name,
+           source = excluded.source,
+           model = excluded.model,
+           expires_at = excluded.expires_at,
+           updated_at = now()`,
+      [keys, names, isGames, titles, sources, model, String(classificationCacheTtlSeconds)]
+    ),
+    null
+  );
+}
+
+// IGDB stage. A match is positive evidence; no match is not evidence of "not a game", so
+// unmatched items fall through to Gemini rather than being recorded as negatives. IGDB
+// rate-limits hard, so this runs under a wall-clock budget and abandons the whole stage on
+// the first 429 - the remainder simply becomes Gemini's problem, which is cheaper per item
+// anyway since Gemini takes them 75 at a time.
+async function resolveWithIgdb(items) {
+  const verdicts = new Map();
+
+  if (items.length === 0 || !process.env.IGDB_TWITCH_CLIENT_ID || !process.env.IGDB_TWITCH_CLIENT_SECRET) {
+    return { verdicts, remaining: items };
+  }
+
+  const deadline = Date.now() + igdbResolveBudgetMs;
+  const remaining = [];
+  let abandoned = false;
+
+  for (const item of items) {
+    if (abandoned || Date.now() >= deadline) {
+      remaining.push(item);
+      continue;
+    }
+
+    try {
+      const matched = await igdbHasMatch(item.detectedName);
+      if (matched) {
+        verdicts.set(item.cacheKey, {
+          detectedName: item.detectedName,
+          isGame: true,
+          canonicalTitle: matched,
+          source: "igdb"
+        });
+      } else {
+        remaining.push(item);
+      }
+    } catch (error) {
+      if (error && error.rateLimited) {
+        abandoned = true;
+      }
+      remaining.push(item);
+    }
+  }
+
+  return { verdicts, remaining };
+}
+
+async function igdbHasMatch(name) {
+  const query = `fields name; search "${escapeIgdbString(name)}"; limit 5;`;
+  const cacheKey = hashCacheKey("igdb-games", query);
+  const cached = await getCachedJson("igdb_search_cache", cacheKey);
+
+  if (cached) {
+    return bestIgdbMatch(name, cached);
+  }
+
+  const clientId = getRequiredEnv("IGDB_TWITCH_CLIENT_ID");
+  const upstream = await callIgdbGames(query, clientId);
+  const payloadText = await upstream.text();
+
+  if (upstream.status === 429) {
+    const error = new Error("IGDB rate limited");
+    error.rateLimited = true;
+    throw error;
+  }
+
+  if (!upstream.ok) {
+    throw new Error(`IGDB search failed: ${upstream.status}`);
+  }
+
+  await upsertCachedJson("igdb_search_cache", cacheKey, query, payloadText, igdbCacheTtlSeconds);
+
+  return bestIgdbMatch(name, JSON.parse(payloadText));
+}
+
+// IGDB search is fuzzy and will answer almost anything, so a hit only counts when the
+// returned title actually resembles what we asked about.
+function bestIgdbMatch(name, payload) {
+  if (!Array.isArray(payload)) {
+    return "";
+  }
+
+  const wanted = normalizeName(name);
+
+  for (const entry of payload) {
+    const candidate = entry && typeof entry.name === "string" ? entry.name : "";
+    if (candidate && normalizeName(candidate) === wanted) {
+      return candidate;
+    }
+  }
+
+  return "";
+}
+
+// Asks Gemini about the items that missed cache, in batches. A batch that fails leaves its
+// items unresolved rather than failing the whole request: the caller still gets every
+// verdict the other batches produced.
+async function classifyWithGemini(items, model) {
+  const verdicts = new Map();
+  const unresolved = [];
+
+  if (items.length === 0) {
+    return { verdicts, unresolved };
+  }
+
+  for (let offset = 0; offset < items.length; offset += classificationBatchSize) {
+    const batch = items.slice(offset, offset + classificationBatchSize);
+
+    try {
+      const named = await requestGeminiClassification(batch, model);
+
+      for (const item of batch) {
+        const match = named.get(item.detectedName.toLowerCase());
+        // A successful batch that omits an item is Gemini saying "not a game" - the prompt
+        // asks it to exclude anything it is unsure of. Recorded as a negative so the next
+        // scan does not pay to ask again.
+        verdicts.set(item.cacheKey, {
+          detectedName: item.detectedName,
+          isGame: !!match,
+          canonicalTitle: match || "",
+          source: "gemini"
+        });
+      }
+    } catch (error) {
+      console.error("Gemini classification batch failed:", error && error.message ? error.message : error);
+      unresolved.push(...batch);
+    }
+  }
+
+  return { verdicts, unresolved };
+}
+
+async function requestGeminiClassification(batch, model) {
+  const apiKey = getRequiredEnv("GEMINI_API_KEY");
+  const upstream = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildClassificationRequest(batch))
+    }
+  );
+
+  if (!upstream.ok) {
+    const detail = await upstream.text();
+    throw new Error(`Gemini request failed: ${upstream.status} ${detail.slice(0, 200)}`);
+  }
+
+  return parseClassificationResponse(batch, await upstream.json());
+}
+
+function buildClassificationRequest(batch) {
+  const lines = ["Return JSON only.",
+    "For each input item that is an actual video game, include the exact detectedName from input and a cleaned canonicalTitle.",
+    "If uncertain, exclude the item.",
+    "Items:"];
+
+  batch.forEach((item, index) => {
+    lines.push(`- index: ${index} | detectedName: ${item.detectedName} | publisher: ${item.publisher} | launcher: ${item.launcher} | exeName: ${item.exeName}`);
+  });
+
+  return {
+    systemInstruction: {
+      parts: [{
+        text: "Classify Windows programs and return only actual video games from the provided list. Exclude launchers, redistributables, tools, editors, drivers, anti-cheat, mods, dedicated servers, benchmarks, installers, and anything uncertain."
+      }]
+    },
+    contents: [{ role: "user", parts: [{ text: lines.join("\n") }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseJsonSchema: {
+        type: "object",
+        properties: {
+          games: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                index: { type: "integer" },
+                detectedName: { type: "string" },
+                canonicalTitle: { type: "string" }
+              },
+              required: ["index", "detectedName", "canonicalTitle"]
+            }
+          }
+        },
+        required: ["games"]
+      },
+      temperature: 0.1,
+      maxOutputTokens: 2048
+    },
+    store: false
+  };
+}
+
+// Returns detectedName (lowercased) -> canonicalTitle for the items Gemini called games.
+function parseClassificationResponse(batch, payload) {
+  const text = payload
+    && Array.isArray(payload.candidates)
+    && payload.candidates[0]
+    && payload.candidates[0].content
+    && Array.isArray(payload.candidates[0].content.parts)
+    && payload.candidates[0].content.parts[0]
+    && payload.candidates[0].content.parts[0].text;
+
+  if (!text) {
+    throw new Error("Gemini response contained no classification text");
+  }
+
+  const parsed = JSON.parse(text);
+  if (!parsed || !Array.isArray(parsed.games)) {
+    throw new Error("Gemini response contained no games array");
+  }
+
+  const named = new Map();
+
+  for (const game of parsed.games) {
+    if (!game || typeof game !== "object" || !Number.isInteger(game.index)) {
+      continue;
+    }
+
+    const expected = batch[game.index];
+    const detectedName = String(game.detectedName || "").trim();
+
+    // Same guard the desktop client applied: an index/name pair that does not match what
+    // we sent means the model drifted, and the row is dropped rather than misattributed.
+    if (!expected || expected.detectedName.toLowerCase() !== detectedName.toLowerCase()) {
+      continue;
+    }
+
+    const canonicalTitle = String(game.canonicalTitle || "").trim();
+    named.set(expected.detectedName.toLowerCase(), canonicalTitle || expected.detectedName);
+  }
+
+  return named;
 }
 
 function buildCustomSearchQuery(queryObject, apiKey, cx) {
