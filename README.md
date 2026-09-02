@@ -226,13 +226,42 @@ tool), an IGDB name match only counts when the installed publisher corroborates 
 IGDB entry's companies. Anything uncorroborated goes to Gemini, which is given the publisher,
 launcher and executable found on the machine and decides from those.
 
-## Publishing To The Microsoft Store
+## Maintaining And Releasing
 
-Fuzion ships as a **packaged desktop app**: the same full-trust WPF process, wrapped in an MSIX via Desktop Bridge. It is not a UWP app, and doesn't need to be.
+**Maintainer-only.** Publishing needs Partner Center access to the existing listing, which
+only the project owner has. Contributors never need anything in this section - it is written
+down so a future maintainer can reproduce a release.
 
-The manifest declares `uap10:RuntimeBehavior="packagedClassicApp"` with `uap10:TrustLevel="mediumIL"`, which means the process runs with the user's normal token at medium integrity and **not** inside an app container. That's what keeps the global keyboard/mouse hooks, XInput/DirectInput gamepad support, registry scanning and launcher folder access working exactly as they do unpackaged - the file/registry virtualization described in Microsoft's MSIX docs applies only to appContainer apps.
+### Deploying the backend
 
-To build the package for submission, run the **Build Store Package (MSIX)** task in VS Code (or the equivalent below), then upload the resulting `.msixupload` in Partner Center:
+The desktop app depends on [FuzionBackend](FuzionBackend) running on Cloud Run, with the
+upstream API keys held in Secret Manager and injected as environment variables. Deploy from
+the backend directory:
+
+```
+gcloud run deploy <service> --region <region> --source .
+```
+
+Existing environment variables, secret bindings and the Cloud SQL attachment are retained, so
+a plain source deploy is enough for a code change.
+
+**Deploy the backend before submitting a client release that needs new endpoints.** The
+reverse order leaves shipped clients calling routes that return 404. Backwards compatibility
+holds in the other direction, since old endpoints are kept.
+
+### Building the Store package
+
+Fuzion ships as a **packaged desktop app**: the same full-trust WPF process, wrapped in an
+MSIX via Desktop Bridge. It is not a UWP app, and doesn't need to be.
+
+The manifest declares `uap10:RuntimeBehavior="packagedClassicApp"` with
+`uap10:TrustLevel="mediumIL"`, so the process runs with the user's normal token at medium
+integrity and **not** inside an app container. That is what keeps the global keyboard/mouse
+hooks, XInput/DirectInput gamepad support, registry scanning and launcher folder access
+working exactly as they do unpackaged - the file/registry virtualization in Microsoft's MSIX
+docs applies only to appContainer apps.
+
+Run the **Build Store Package (MSIX)** task in VS Code, or:
 
 ```
 msbuild FuzionPackaging\FuzionPackaging.wapproj /restore /t:Build ^
@@ -240,14 +269,52 @@ msbuild FuzionPackaging\FuzionPackaging.wapproj /restore /t:Build ^
   /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=StoreUpload
 ```
 
-Output lands in `FuzionPackaging\AppPackages\`. Signing is intentionally off - the Store re-signs the package with its own certificate, so no code signing certificate needs to be bought or maintained. (This is a real difference from an EXE/MSI listing, which requires you to Authenticode-sign the installer yourself *and* host it at a versioned HTTPS URL on your own CDN.)
+Output lands in `FuzionPackaging\AppPackages\`. Upload the single `.msixupload` - not the
+bare `.msix` in the neighbouring `_Test` folder, which is for sideloading and omits the
+symbol file the Store uses to symbolicate crash reports.
 
-Notes for maintainers:
+Signing is intentionally off: the Store re-signs the package with its own certificate, so no
+code signing certificate has to be bought or maintained. (An EXE or MSI listing would instead
+require Authenticode-signing the installer yourself *and* hosting it at a versioned HTTPS URL
+on your own CDN.)
 
-- The `Identity` block in [FuzionPackaging/Package.appxmanifest](FuzionPackaging/Package.appxmanifest) must match Partner Center's *Product identity* page exactly, or the upload is rejected.
-- Bump `Version` in that manifest for each submission, and keep `ApplicationVersion` in [FuzionDock/Fuzion.csproj](FuzionDock/Fuzion.csproj) in step with it. The Store requires the revision (fourth) part to be `0`.
-- The regular `Any CPU` build does not build the package, so the normal edit/run loop stays fast.
-- Launch-on-startup is declared as a `windows.startupTask` extension, so users can also toggle it from Settings > Apps > Startup.
+### What the Store rejects
+
+Every one of these has actually been hit, so they are worth checking before uploading:
+
+- **The display name must be reserved.** `Package/Properties/DisplayName` has to match a name
+  reserved in Partner Center exactly. It is *not* the name users see - the tile and Start menu
+  read `uap:VisualElements/DisplayName`, which is free-form and can differ.
+- **It must remain a bundle.** An early release shipped as an `.msixbundle`, and the Store
+  requires every later submission to stay one. `AppxBundle` must stay `Always`; `Never`
+  produces a bare `.msix` that is rejected.
+- **Identity must match exactly.** The `Identity` block in
+  [FuzionPackaging/Package.appxmanifest](FuzionPackaging/Package.appxmanifest) must equal
+  Partner Center's *Product identity* page.
+- **The version must increase**, and its fourth part must be `0`. Bump `Version` in the
+  manifest and keep `ApplicationVersion` in [FuzionDock/Fuzion.csproj](FuzionDock/Fuzion.csproj)
+  in step.
+
+### Architectures
+
+Everything shipped is AnyCPU managed code with no native binaries, so a single payload serves
+every architecture and adding one costs only build time. `AppxBundlePlatforms` currently
+builds `x86|x64`.
+
+The packaging project builds `Fuzion.csproj` **directly** rather than through the solution, so
+every architecture listed there also needs a matching `Configuration|Platform` block in that
+csproj. The solution's own platform mapping is bypassed, and without the block MSBuild fails
+with an unset `OutputPath`.
+
+`arm64` is not built today. It would work the same way and would let Windows on ARM run
+natively instead of emulating, but it has not been tested on ARM hardware.
+
+### Other notes
+
+- The regular `Any CPU` build does not build the package, so the normal edit/run loop stays
+  fast.
+- Launch-on-startup is declared as a `windows.startupTask` extension, so users can toggle it
+  from Settings > Apps > Startup.
 
 ## License
 
