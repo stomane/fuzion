@@ -15,7 +15,12 @@
     <DefaultLanguage>en-US</DefaultLanguage>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
-    <AppxBundle>Never</AppxBundle>
+    <!-- A previous submission shipped as an .msixbundle; the Store requires all later
+         submissions to remain bundles, so this cannot go back to Never. -->
+    <AppxBundle>Always</AppxBundle>
+    <!-- Everything shipped is AnyCPU managed code with no native binaries, so one
+         payload serves every architecture. Earlier Store releases shipped x86 too. -->
+    <AppxBundlePlatforms>x86|x64</AppxBundlePlatforms>
     <EntryPointProjectUniqueName>..\FuzionDock\Fuzion.csproj</EntryPointProjectUniqueName>
   </PropertyGroup>
   <ItemGroup>

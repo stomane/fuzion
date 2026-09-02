@@ -24,6 +24,7 @@ FuzionBackend/.env
 /FuzionPackaging/bin/
 /FuzionPackaging/obj/
 /FuzionPackaging/AppPackages/
+/FuzionPackaging/BundleArtifacts/
 *.msix
 *.msixupload
 *.msixbundle
