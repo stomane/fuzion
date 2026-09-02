@@ -1,0 +1,6 @@
+# Buildpacks install dependencies from package-lock.json; shipping the local
+# node_modules would bloat the upload and can carry platform-specific binaries.
+node_modules/
+.env
+.env.local
+npm-debug.log

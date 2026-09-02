@@ -45,9 +45,12 @@ namespace Fuzion.AI
             var games = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var evaluatedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            if (!Constants.HasGeminiAccess || programs == null)
+            // Classification now goes through the Fuzion backend, which resolves in the order
+            // cache -> IGDB -> Gemini and caches every verdict, so what matters here is having
+            // a backend URL rather than a Gemini key.
+            if (string.IsNullOrWhiteSpace(Constants.BackendBaseUrl) || programs == null)
             {
-                System.Diagnostics.Debug.WriteLine($"[Gemini] Skipping: HasAccess={Constants.HasGeminiAccess}, ProgramsNull={programs == null}");
+                System.Diagnostics.Debug.WriteLine($"[Classify] Skipping: BackendUrl='{Constants.BackendBaseUrl}', ProgramsNull={programs == null}");
                 return new ClassificationResult(games, evaluatedNames);
             }
 
@@ -70,21 +73,22 @@ namespace Fuzion.AI
                 batchNum++;
                 try
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Gemini] Processing batch {batchNum} with {batch.Count} items");
+                    System.Diagnostics.Debug.WriteLine($"[Classify] Processing batch {batchNum} with {batch.Count} items");
                     var batchResult = ClassifyBatch(batch);
-                    System.Diagnostics.Debug.WriteLine($"[Gemini] Batch {batchNum} returned {batchResult.Count} classifications");
+                    System.Diagnostics.Debug.WriteLine($"[Classify] Batch {batchNum}: {batchResult.Games.Count} games, {batchResult.Evaluated.Count} of {batch.Count} resolved");
 
-                    // Only mark this batch's programs as evaluated once we know the call succeeded,
-                    // so a failed batch falls back to local DB / IGDB checks instead of being
-                    // treated as a confirmed "not a game".
-                    foreach (var candidate in batch)
+                    // Only names the backend returned a verdict for count as evaluated. It
+                    // reports anything it could not resolve - a failed Gemini batch, a
+                    // rate-limited IGDB - separately, and those must fall through to the
+                    // caller's other checks rather than being read as "not a game".
+                    foreach (var evaluated in batchResult.Evaluated)
                     {
-                        evaluatedNames.Add(candidate.Program.DisplayName);
+                        evaluatedNames.Add(evaluated);
                     }
 
-                    foreach (var classification in batchResult)
+                    foreach (var classification in batchResult.Games)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[Gemini] Classification: {classification.Key} => {classification.Value}");
+                        System.Diagnostics.Debug.WriteLine($"[Classify] {classification.Key} => {classification.Value}");
                         games[classification.Key] = classification.Value;
                     }
                 }
@@ -143,47 +147,45 @@ namespace Fuzion.AI
             return true;
         }
 
-        private static Dictionary<string, string> ClassifyBatch(List<BatchCandidate> batch)
+        private sealed class BatchClassification
         {
-            string url = Constants.BuildGeminiGenerateContentUrl();
+            public Dictionary<string, string> Games { get; }
 
-            string prompt = BuildPrompt(batch);
+            // Names the backend returned a verdict for, game or not. Anything it listed as
+            // unresolved is deliberately absent so callers keep their own fallbacks.
+            public HashSet<string> Evaluated { get; }
 
-            var requestBody = new JObject
+            public BatchClassification(Dictionary<string, string> games, HashSet<string> evaluated)
             {
-                ["systemInstruction"] = new JObject
+                Games = games;
+                Evaluated = evaluated;
+            }
+        }
+
+        /// <summary>
+        /// Asks the Fuzion backend to classify a batch. The backend answers from its shared
+        /// verdict cache first, then IGDB, then Gemini, and caches whatever it learns - so a
+        /// second run over the same library resolves without reaching either service.
+        /// </summary>
+        private static BatchClassification ClassifyBatch(List<BatchCandidate> batch)
+        {
+            var games = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var evaluated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var items = new JArray();
+            foreach (var item in batch)
+            {
+                items.Add(new JObject
                 {
-                    ["parts"] = new JArray
-                    {
-                        new JObject
-                        {
-                            ["text"] = "Classify Windows programs and return only actual video games from the provided list. Exclude launchers, redistributables, tools, editors, drivers, anti-cheat, mods, dedicated servers, benchmarks, installers, and anything uncertain."
-                        }
-                    }
-                },
-                ["contents"] = new JArray
-                {
-                    new JObject
-                    {
-                        ["role"] = "user",
-                        ["parts"] = new JArray
-                        {
-                            new JObject
-                            {
-                                ["text"] = prompt
-                            }
-                        }
-                    }
-                },
-                ["generationConfig"] = new JObject
-                {
-                    ["responseMimeType"] = "application/json",
-                    ["responseJsonSchema"] = BuildSchema(),
-                    ["temperature"] = 0.1,
-                    ["maxOutputTokens"] = 2048
-                },
-                ["store"] = false
-            };
+                    ["detectedName"] = item.Program.DisplayName,
+                    ["publisher"] = string.IsNullOrWhiteSpace(item.Program.Publisher) ? "unknown" : item.Program.Publisher,
+                    ["launcher"] = item.Program.Launcher.ToString(),
+                    ["exeName"] = string.IsNullOrWhiteSpace(item.Program.ExeName) ? "unknown" : item.Program.ExeName
+                });
+            }
+
+            var requestBody = new JObject { ["items"] = items };
+            string url = Constants.BackendBaseUrl + "/classify/programs";
 
             using (var request = new HttpRequestMessage(HttpMethod.Post, url))
             {
@@ -194,135 +196,46 @@ namespace Fuzion.AI
                     string responseContent = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                     if (!response.IsSuccessStatusCode)
                     {
-                        throw new InvalidOperationException($"Gemini API request failed: {(int)response.StatusCode} {response.ReasonPhrase} {responseContent}");
+                        throw new InvalidOperationException($"Classification request failed: {(int)response.StatusCode} {response.ReasonPhrase} {responseContent}");
                     }
 
-                    return ParseClassifications(batch, responseContent);
-                }
-            }
-        }
+                    JObject parsed = JObject.Parse(responseContent);
 
-        private static JObject BuildSchema()
-        {
-            return new JObject
-            {
-                ["type"] = "object",
-                ["properties"] = new JObject
-                {
-                    ["games"] = new JObject
+                    JObject stats = parsed["stats"] as JObject;
+                    if (stats != null)
                     {
-                        ["type"] = "array",
-                        ["items"] = new JObject
+                        System.Diagnostics.Debug.WriteLine($"[Classify] backend stats: cache={stats["fromCache"]} igdb={stats["fromIgdb"]} gemini={stats["fromGemini"]} unresolved={stats["unresolved"]}");
+                    }
+
+                    JArray results = parsed["results"] as JArray;
+                    if (results == null)
+                    {
+                        throw new InvalidOperationException("Classification response contained no results array.");
+                    }
+
+                    foreach (JObject entry in results.OfType<JObject>())
+                    {
+                        string detectedName = entry["detectedName"]?.Value<string>()?.Trim();
+                        if (string.IsNullOrWhiteSpace(detectedName))
                         {
-                            ["type"] = "object",
-                            ["properties"] = new JObject
-                            {
-                                ["index"] = new JObject { ["type"] = "integer" },
-                                ["detectedName"] = new JObject { ["type"] = "string" },
-                                ["canonicalTitle"] = new JObject { ["type"] = "string" }
-                            },
-                            ["required"] = new JArray("index", "detectedName", "canonicalTitle"),
-                            ["additionalProperties"] = false,
-                            ["propertyOrdering"] = new JArray("index", "detectedName", "canonicalTitle")
+                            continue;
                         }
-                    }
-                },
-                ["required"] = new JArray("games"),
-                ["additionalProperties"] = false,
-                ["propertyOrdering"] = new JArray("games")
-            };
-        }
 
-        private static string BuildPrompt(List<BatchCandidate> batch)
-        {
-            var builder = new StringBuilder();
-            builder.AppendLine("Return JSON only.");
-            builder.AppendLine("For each input item that is an actual video game, include the exact detectedName from input and a cleaned canonicalTitle.");
-            builder.AppendLine("If uncertain, exclude the item.");
-            builder.AppendLine("Items:");
+                        evaluated.Add(detectedName);
 
-            foreach (var item in batch)
-            {
-                builder.Append("- index: ").Append(item.Index)
-                    .Append(" | detectedName: ").Append(item.Program.DisplayName)
-                    .Append(" | publisher: ").Append(string.IsNullOrWhiteSpace(item.Program.Publisher) ? "unknown" : item.Program.Publisher)
-                    .Append(" | launcher: ").Append(item.Program.Launcher)
-                    .Append(" | exeName: ").Append(string.IsNullOrWhiteSpace(item.Program.ExeName) ? "unknown" : item.Program.ExeName)
-                    .AppendLine();
-            }
+                        bool isGame = entry["isGame"]?.Value<bool>() ?? false;
+                        if (!isGame)
+                        {
+                            continue;
+                        }
 
-            return builder.ToString();
-        }
-
-        private static Dictionary<string, string> ParseClassifications(List<BatchCandidate> batch, string responseContent)
-        {
-            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            
-            try
-            {
-                JObject outer = JObject.Parse(responseContent);
-                JArray candidates = outer["candidates"] as JArray;
-                if (candidates == null || candidates.Count == 0)
-                {
-                    System.Diagnostics.Debug.WriteLine("[Gemini] No candidates in response");
-                    return result;
-                }
-
-                string outputJson = candidates.FirstOrDefault()?["content"]?["parts"]?.FirstOrDefault()?["text"]?.Value<string>();
-                if (string.IsNullOrWhiteSpace(outputJson))
-                {
-                    System.Diagnostics.Debug.WriteLine("[Gemini] No text content in response");
-                    return result;
-                }
-
-                System.Diagnostics.Debug.WriteLine($"[Gemini] Raw response: {outputJson.Substring(0, Math.Min(200, outputJson.Length))}...");
-
-                JObject parsed = JObject.Parse(outputJson);
-                JArray games = parsed["games"] as JArray;
-                if (games == null)
-                {
-                    System.Diagnostics.Debug.WriteLine("[Gemini] No 'games' array in parsed JSON");
-                    return result;
-                }
-
-                System.Diagnostics.Debug.WriteLine($"[Gemini] Parsed {games.Count} games from response");
-
-                foreach (JObject game in games.OfType<JObject>())
-                {
-                    int? index = game["index"]?.Value<int>();
-                    string detectedName = game["detectedName"]?.Value<string>()?.Trim();
-                    string canonicalTitle = game["canonicalTitle"]?.Value<string>()?.Trim();
-
-                    if (!index.HasValue)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Gemini] Skipping: missing index");
-                        continue;
+                        string canonicalTitle = entry["canonicalTitle"]?.Value<string>()?.Trim();
+                        games[detectedName] = string.IsNullOrWhiteSpace(canonicalTitle) ? detectedName : canonicalTitle;
                     }
 
-                    if (index.Value < 0 || index.Value >= batch.Count)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Gemini] Skipping: index {index} out of range [0, {batch.Count})");
-                        continue;
-                    }
-
-                    string expectedName = batch[index.Value].Program.DisplayName;
-                    if (!string.Equals(expectedName, detectedName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Gemini] Skipping: name mismatch. Expected '{expectedName}', got '{detectedName}'");
-                        continue;
-                    }
-
-                    string finalTitle = string.IsNullOrWhiteSpace(canonicalTitle) ? expectedName : canonicalTitle;
-                    result[expectedName] = finalTitle;
-                    System.Diagnostics.Debug.WriteLine($"[Gemini] Added: {expectedName} -> {finalTitle}");
+                    return new BatchClassification(games, evaluated);
                 }
             }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[Gemini] Parse error: {ex.GetType().Name}: {ex.Message}");
-            }
-
-            return result;
         }
 
         private static IEnumerable<List<BatchCandidate>> Batch(List<BatchCandidate> items, int batchSize)

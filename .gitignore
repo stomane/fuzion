@@ -16,6 +16,8 @@ local.secrets.json
 /FuzionDock/obj/
 /FuzionDock/Fuzion/
 .mcp.json
+FuzionBackend/node_modules/
+FuzionBackend/.env
 
 # MSIX packaging build output. The project itself (wapproj, manifest, Images) is tracked.
 # Only generated artifacts should be ignored.
@@ -27,3 +29,5 @@ local.secrets.json
 *.msixbundle
 *.appxsym
 *.pfx
+
+.claude/settings.local.json

@@ -1,0 +1,20 @@
+{
+  "name": "fuzion-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloud Run proxy backend for Fuzion.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js",
+    "start:local": "node --env-file=.env src/server.js"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.14.0",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}

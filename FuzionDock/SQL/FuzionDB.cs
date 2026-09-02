@@ -1,10 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
 using Fuzion.Programs;
 using Newtonsoft.Json;
@@ -13,6 +9,8 @@ namespace Fuzion.SQL
 {
     class FuzionDB
     {
+        private static readonly HttpClient httpClient = new HttpClient();
+
         public class GameResult
         {
             public int id { get; set; }
@@ -20,7 +18,7 @@ namespace Fuzion.SQL
             public string iconlink { get; set; }
             public string exename { get; set; }
             public bool falsepositive { get; set; }
-            public bool iconrelevance { get; set; }
+            public int iconrelevance { get; set; }
         }
 
         public class DBGameObject
@@ -52,59 +50,24 @@ namespace Fuzion.SQL
             public int iconRelevance { get; set; }
         }
 
-        //public static bool GameExistsInDatabase(string gameName, bool fPositive = false)
-        //{
-        //    // Request
-        //    WebRequest webRequest;
-        //    Stream stream;
-        //    int falsePositive = fPositive ? 1 : 0;
-        //    Uri rUri = new Uri("http://api.fuzion.gg:8040/get/main?gamename=" + gameName + "&falsepositive="+falsePositive);
+        public class PushProgram
+        {
+            public string name { get; set; }
+            public string iconLink { get; set; }
+            public string exeName { get; set; }
+        }
 
-        //    webRequest = WebRequest.Create(rUri);
-        //    stream = webRequest.GetResponse().GetResponseStream();
-        //    StreamReader streamReader = new StreamReader(stream);
-        //    string jsonData = streamReader.ReadToEnd();
-
-        //    var dbObj = JsonConvert.DeserializeObject<DBObject>(jsonData);
-
-        //    Console.WriteLine("DB OBJ:");
-        //    Console.WriteLine("Status: " + dbObj.status);
-        //    Console.WriteLine("Icon Link: " + dbObj.result[0].iconlink);
-
-        //    Console.WriteLine($"Game Exists Test for {gameName} data:");
-        //    Console.WriteLine(jsonData);
-
-        //    streamReader.Close();
-        //    stream.Close();
-
-        //    return true;
-        //}
-
-        public static Tuple<string,int> GetIconTuple(string gameName, bool fPositive = false)
+        public static Tuple<string, int> GetIconTuple(string gameName, bool fPositive = false)
         {
             var result = Tuple.Create(string.Empty, 0);
 
             try
             {
-                // Request
-                WebRequest webRequest;
-                Stream stream;
-                int falsePositive = fPositive ? 1 : 0;
-                Uri rUri = new Uri("http://api.fuzion.gg:8040/get/main?gamename=" + gameName + "&falsepositive=" + falsePositive);
+                DBGameObject dbObj = GetGameObject(gameName, fPositive);
 
-                webRequest = WebRequest.Create(rUri);
-                stream = webRequest.GetResponse().GetResponseStream();
-                StreamReader streamReader = new StreamReader(stream);
-                string jsonData = streamReader.ReadToEnd();
-
-                var dbObj = JsonConvert.DeserializeObject<DBGameObject>(jsonData);
-
-                streamReader.Close();
-                stream.Close();
-
-                if(dbObj.result[0].iconlink.Length != 0)
+                if (dbObj?.result != null && dbObj.result.Count > 0 && !string.IsNullOrWhiteSpace(dbObj.result[0].iconlink))
                 {
-                    result = Tuple.Create(dbObj.result[0].iconlink, 10);
+                    result = Tuple.Create(dbObj.result[0].iconlink, dbObj.result[0].iconrelevance);
                     Console.WriteLine("Returning Tuple from FUZION DB:");
                     Console.WriteLine(result.ToString());
                 }
@@ -119,46 +82,16 @@ namespace Fuzion.SQL
 
         public static bool GameExistsInDatabase(string gameName, bool fPositive = false)
         {
-            // Request
-            WebRequest webRequest;
-            Stream stream;
-            int falsePositive = fPositive ? 1 : 0;
-            Uri rUri = new Uri("http://api.fuzion.gg:8040/get/main?gamename=" + gameName + "&falsepositive=" + falsePositive);
-
-            webRequest = WebRequest.Create(rUri);
-            stream = webRequest.GetResponse().GetResponseStream();
-            StreamReader streamReader = new StreamReader(stream);
-            string jsonData = streamReader.ReadToEnd();
-
-            var dbObj = JsonConvert.DeserializeObject<DBGameObject>(jsonData);
-
-            streamReader.Close();
-            stream.Close();
-
-            return dbObj.status;
+            var dbObj = GetGameObject(gameName, fPositive);
+            return dbObj != null && dbObj.status;
         }
 
         public static bool ProgramExistsInDatabase(string progName, bool fPositive = false)
         {
             try
             {
-                // Request
-                WebRequest webRequest;
-                Stream stream;
-                int falsePositive = fPositive ? 1 : 0;
-                Uri rUri = new Uri("http://api.fuzion.gg:8040/get/program?programname=" + progName + "&falsepositive=" + falsePositive);
-
-                webRequest = WebRequest.Create(rUri);
-                stream = webRequest.GetResponse().GetResponseStream();
-                StreamReader streamReader = new StreamReader(stream);
-                string jsonData = streamReader.ReadToEnd();
-
-                var dbObj = JsonConvert.DeserializeObject<DBProgramObject>(jsonData);
-
-                streamReader.Close();
-                stream.Close();
-
-                return dbObj.status;
+                var dbObj = GetProgramObject(progName, fPositive);
+                return dbObj != null && dbObj.status;
             }
             catch (Exception)
             {
@@ -170,86 +103,95 @@ namespace Fuzion.SQL
         {
             try
             {
-                // Prepare the list for serialization
-                List<PushGame> pushGamesList = new List<PushGame>();
+                if (string.IsNullOrWhiteSpace(Constants.BackendBaseUrl))
+                {
+                    return;
+                }
+
+                var pushGamesList = new List<PushGame>();
                 for (int i = 0; i < gamesList.Count; i++)
                 {
-                    PushGame pGame = new PushGame
+                    pushGamesList.Add(new PushGame
                     {
                         gameName = gamesList[i].DisplayName,
                         exeName = gamesList[i].ExeName,
                         iconLink = gamesList[i].IconURI,
                         iconRelevance = 10
-                    };
-
-                    //// Check if iconLink is a valid URL - will add later
-                    //bool result = Uri.TryCreate(pGame.iconLink, UriKind.Absolute, out Uri uriResult)
-                    //    && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
-
-                    //if(result)
-                    pushGamesList.Add(pGame);
+                    });
                 }
 
-                // Should move HTTPClient to a static field and initialize it only if necessary
-                // Read more about HTTPClient on MSDN
-                var client = new HttpClient();
-
-                //var jsonString = "[{\"gameName\":\"TESTOVAIGRA\",\"iconLink\":\"testovaigra.com\",\"exeName\":\"hollowknight.exe\",\"iconRelevance\":\"10\"},{\"gameName\":\"TESTOVAIGRA2\",\"iconLink\":\"linktoicon.com\",\"exeName\":\"testovaigra2.exe\",\"iconRelevance\":\"10\"}]";
-                var jsonString = JsonConvert.SerializeObject(pushGamesList);
-
+                string jsonString = JsonConvert.SerializeObject(pushGamesList);
                 var values = new Dictionary<string, string>
                 {
-                    { "data" , jsonString }
+                    { "data", jsonString }
                 };
 
-                var content = new FormUrlEncodedContent(values);
+                var response = await httpClient.PostAsync(
+                    Constants.BackendBaseUrl + "/insert/main",
+                    new FormUrlEncodedContent(values)).ConfigureAwait(false);
 
-                var response = await client.PostAsync("http://api.fuzion.gg:8040/insert/main", content).ConfigureAwait(false);
-
-                var responseString = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                Console.WriteLine("Fuzion DB Response for pushing Games List: "+responseString);
-                Console.WriteLine("LIST PUSHED:");
-                Console.WriteLine(jsonString);
-                client.Dispose();
+                string responseString = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                Console.WriteLine("Fuzion DB Response for pushing Games List: " + responseString);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-               
+                Console.WriteLine("Fuzion DB push failed: " + ex.Message);
             }
-      
         }
 
         public static async void PushList(List<Program> programList)
         {
             try
             {
-                // Should move HTTPClient to a static field and initialize it only if necessary
-                // Read more about HTTPClient on MSDN
-                var client = new HttpClient();
+                if (string.IsNullOrWhiteSpace(Constants.BackendBaseUrl))
+                {
+                    return;
+                }
 
-                // Sample JSON format
-                //var jsonString = "[{\"gameName\":\"TESTOVAIGRA\",\"iconLink\":\"testovaigra.com\",\"exeName\":\"hollowknight.exe\",\"iconRelevance\":\"10\"},{\"gameName\":\"TESTOVAIGRA2\",\"iconLink\":\"linktoicon.com\",\"exeName\":\"testovaigra2.exe\",\"iconRelevance\":\"10\"}]";
+                var pushPrograms = new List<PushProgram>();
+                for (int i = 0; i < programList.Count; i++)
+                {
+                    pushPrograms.Add(new PushProgram
+                    {
+                        name = programList[i].DisplayName,
+                        iconLink = programList[i].IconURI,
+                        exeName = programList[i].ExeName
+                    });
+                }
 
-                var jsonString = string.Empty;
-
+                string jsonString = JsonConvert.SerializeObject(pushPrograms);
                 var values = new Dictionary<string, string>
                 {
-                    { "data" , jsonString }
+                    { "data", jsonString }
                 };
 
-                var content = new FormUrlEncodedContent(values);
+                var response = await httpClient.PostAsync(
+                    Constants.BackendBaseUrl + "/insert/program",
+                    new FormUrlEncodedContent(values)).ConfigureAwait(false);
 
-                var response = await client.PostAsync("http://api.fuzion.gg:8040/insert/main", content).ConfigureAwait(false);
-
-                var responseString = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                client.Dispose();
+                string responseString = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                Console.WriteLine("Fuzion DB Response for pushing Programs List: " + responseString);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-
+                Console.WriteLine("Fuzion DB push failed: " + ex.Message);
             }
-
         }
 
+        private static DBGameObject GetGameObject(string gameName, bool fPositive)
+        {
+            int falsePositive = fPositive ? 1 : 0;
+            var uri = new Uri(Constants.BackendBaseUrl + "/get/main?gamename=" + Uri.EscapeDataString(gameName ?? string.Empty) + "&falsepositive=" + falsePositive);
+            string jsonData = httpClient.GetStringAsync(uri).GetAwaiter().GetResult();
+            return JsonConvert.DeserializeObject<DBGameObject>(jsonData);
+        }
+
+        private static DBProgramObject GetProgramObject(string progName, bool fPositive)
+        {
+            int falsePositive = fPositive ? 1 : 0;
+            var uri = new Uri(Constants.BackendBaseUrl + "/get/program?programname=" + Uri.EscapeDataString(progName ?? string.Empty) + "&falsepositive=" + falsePositive);
+            string jsonData = httpClient.GetStringAsync(uri).GetAwaiter().GetResult();
+            return JsonConvert.DeserializeObject<DBProgramObject>(jsonData);
+        }
     }
 }

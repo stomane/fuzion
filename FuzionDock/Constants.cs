@@ -14,7 +14,6 @@ namespace Fuzion
             public string GoogleSearchApiKey { get; set; }
             public string GoogleSearchProxyUrl { get; set; }
             public string IgdbProxyUrl { get; set; }
-            public string DbPassword { get; set; }
             public string SteamApiKey { get; set; }
             public string GeminiApiKey { get; set; }
             public string GeminiProxyUrl { get; set; }
@@ -38,12 +37,8 @@ namespace Fuzion
         public static string igdbProxyURL = GetConfiguredValue(
             "IGDB_PROXY_URL",
             localSecrets?.IgdbProxyUrl,
-            "IGDBProxyURL.txt");
-
-        public static string dbPassword = GetConfiguredValue(
-            "DB_PASSWORD",
-            localSecrets?.DbPassword,
-            "dbPassword.txt");
+            "IGDBProxyURL.txt",
+            "IgdbProxyUrl");
 
         public static string geminiApiKey = GetConfiguredValue(
             "GEMINI_API_KEY",
@@ -73,6 +68,7 @@ namespace Fuzion
         public static bool HasGeminiApiKey => HasGeminiAccess;
         public static bool UseGoogleSearchProxy => !string.IsNullOrWhiteSpace(gSearchProxyUrl);
         public static bool UseGeminiProxy => !string.IsNullOrWhiteSpace(geminiProxyUrl);
+        public static string BackendBaseUrl => string.IsNullOrWhiteSpace(igdbProxyURL) ? string.Empty : igdbProxyURL.Trim().TrimEnd('/');
         public static string GeminiModel => string.IsNullOrWhiteSpace(geminiModel) ? "gemini-3.6-flash" : geminiModel.Trim();
 
         // Sentry DSNs are safe to ship in client code (they only permit sending events into

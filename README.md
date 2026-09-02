@@ -38,7 +38,7 @@ Every key below is optional - games can always be added manually from the UI reg
 - A **Gemini API key** (from Google AI Studio) - classifies detected programs into actual games via an LLM.
 - A **Google Custom Search API key** - fetches game icons/artwork automatically.
 
-An IGDB proxy is also supported as an alternative/additional way to classify games, and the legacy remote database and Steam key are optional fallbacks that can safely be left unset.
+Game classification and metadata both go through the Fuzion backend, which fronts IGDB and Gemini and caches the results. The Steam key is an optional extra that can safely be left unset.
 
 ## Running In VS Code
 
@@ -65,7 +65,6 @@ The app reads configuration from environment variables now. The main ones curren
 - `GOOGLE_SEARCH_API_KEY`
 - `GOOGLE_SEARCH_PROXY_URL`
 - `IGDB_PROXY_URL`
-- `DB_PASSWORD`
 - `GEMINI_API_KEY`
 - `GEMINI_PROXY_URL`
 - `REDDIT_CLIENT_ID`
@@ -76,14 +75,13 @@ Those values are not required for the project to build, but some runtime feature
 
 For local development, Fuzion now also supports an ignored file at [FuzionDock/local.secrets.example.json](FuzionDock/local.secrets.example.json): create `FuzionDock/local.secrets.json` next to the project file and Debug builds will copy it to the output directory automatically. Release and Store packaging builds do not copy that file, so local secrets do not get embedded into a submission by accident. Environment variables take precedence over the local file.
 
-For published builds, safe non-secret defaults can also be shipped in [FuzionDock/App.config](FuzionDock/App.config) as `GeminiProxyUrl` and `GoogleSearchProxyUrl`. The app resolves configuration in this order: environment variable, `local.secrets.json`, then `App.config`, then any legacy text-file fallback.
+For published builds, safe non-secret defaults can also be shipped in [FuzionDock/App.config](FuzionDock/App.config) as `GeminiProxyUrl`, `GoogleSearchProxyUrl`, and `IgdbProxyUrl`. The app resolves configuration in this order: environment variable, `local.secrets.json`, then `App.config`, then any legacy text-file fallback.
 
 The current app uses:
 
 - `GoogleSearchApiKey` for online icon and executable lookup
 - `GoogleSearchProxyUrl` for a release-safe online icon/executable lookup backend
 - `IgdbProxyUrl` for IGDB-backed game detection
-- `DbPassword` for the legacy remote database path
 - `GeminiApiKey` for batched LLM-based game classification fallback
 - `GeminiProxyUrl` for a release-safe Gemini backend
 - `GeminiModel` to override the default `gemini-3.6-flash`
@@ -98,9 +96,9 @@ Gemini setup for this repo:
 4. Restrict the key to Gemini API only.
 5. For local development only, put the value in `FuzionDock/local.secrets.json` as `GeminiApiKey` or set `GEMINI_API_KEY` in your environment.
 
-Do not ship a shared Gemini API key inside a published desktop build. Any key bundled into the client can be extracted and abused. For a production release, point `GeminiProxyUrl` in [FuzionDock/App.config](FuzionDock/App.config) at your backend and keep the real Gemini key server-side there. The app will send the same JSON body it already uses for `generateContent`, and the proxy should accept a `model` query parameter and return the raw Gemini JSON response.
+Do not ship a shared Gemini API key inside a published desktop build. Any key bundled into the client can be extracted and abused. Keep the real key server-side and point the app at your backend instead.
 
-The current implementation uses Gemini structured JSON output through the Gemini `generateContent` API to classify a batch of detected programs and return only actual games.
+Game classification no longer calls Gemini from the client at all. The app posts a batch of detected programs to `POST /classify/programs` on the backend, which answers from its shared cache where it can and only reaches IGDB or Gemini for what is left - see [Running The Backend Locally](#running-the-backend-locally). The prompt, response schema and parsing all live server-side, so the client ships no Gemini contract. `GeminiProxyUrl` remains supported as a thin passthrough for anything that wants raw `generateContent` access.
 
 Google Custom Search (icons) setup for this repo:
 
@@ -110,7 +108,123 @@ Google Custom Search (icons) setup for this repo:
 
 For a published build that should work for all users, do not ship the Custom Search key or engine ID in the client. Instead, point `GoogleSearchProxyUrl` in [FuzionDock/App.config](FuzionDock/App.config) at your backend. The app will send the same query parameters it already uses for Google Custom Search and expects the same JSON shape back, especially `items[].link`.
 
+IGDB setup for this repo:
+
+1. Create a Twitch developer application for the backend and use a confidential client type.
+2. Keep the Twitch client ID and client secret server-side only.
+3. Point `IgdbProxyUrl` in [FuzionDock/App.config](FuzionDock/App.config) at your backend base URL.
+
+The current desktop client calls the proxy as `GET /production/v4/games?...`, and the backend translates those query parameters into IGDB's POST query format before calling Twitch / IGDB with a server-side app access token.
+
+The backend service for the official app now lives in [FuzionBackend/package.json](FuzionBackend/package.json). It is intended for Cloud Run and uses Secret Manager for the live Gemini, IGDB, and Custom Search credentials.
+
+`FuzionBackend` also supports an optional PostgreSQL cache, used for confirmed game/program names, is-game verdicts, and cached IGDB and Custom Search responses. Set either `CLOUD_SQL_CONNECTION_NAME` (Cloud Run) or `POSTGRES_HOST`/`POSTGRES_PORT` (anywhere else) along with `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`, and the service creates its tables on first start. Without a database the service still runs; it just caches nothing.
+
+See [FuzionBackend/.env.example](FuzionBackend/.env.example) for the full environment contract, and [Running The Backend Locally](#running-the-backend-locally) for a working local setup.
+
 If the API keys are missing, Fuzion now starts in a plain offline mode: local launcher detection and local icons still work, while Google image search and IGDB lookups are skipped.
+
+## Running The Backend Locally
+
+The desktop app talks to a small Node service in [FuzionBackend](FuzionBackend) that holds the
+API keys server-side. You can run your own copy, so you never need anyone else's credentials -
+nothing in this repository contains a real key.
+
+Requires Node 20 or newer.
+
+```
+cd FuzionBackend
+npm install
+cp .env.example .env
+```
+
+Fill in whichever upstream credentials you have. All of them are optional: an endpoint whose
+credential is missing returns an error, and everything else keeps working.
+
+### Optional: a local database
+
+The backend runs fine with no database - it simply stops caching. Adding one gives you the
+shared caches (is-game verdicts, icon binaries, IGDB and Custom Search responses). Any
+PostgreSQL will do:
+
+```
+docker run -d --name fuzion-pg -p 5432:5432 \
+  -e POSTGRES_PASSWORD=devpassword -e POSTGRES_DB=fuzioncache postgres:16-alpine
+```
+
+Then set in `.env`:
+
+```
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+POSTGRES_DB=fuzioncache
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=devpassword
+```
+
+Tables are created automatically on first start. `CLOUD_SQL_CONNECTION_NAME` is the Cloud Run
+path (a unix socket) and takes precedence when set, so leave it blank locally.
+
+### Start it
+
+`npm start` reads configuration from the real environment only. To load the `.env` file you
+just created, use the local script instead - it passes Node's built-in `--env-file`, so no
+extra dependency is involved:
+
+```
+npm run start:local
+curl http://localhost:8080/health
+```
+
+Set `REQUEST_LOG=1` to log every request with its status and duration, which is the quickest
+way to see what the desktop app is actually asking for.
+
+### Point the desktop app at it
+
+Create `FuzionDock/local.secrets.json`:
+
+```json
+{
+  "IgdbProxyUrl": "http://127.0.0.1:8080",
+  "GoogleSearchProxyUrl": "http://127.0.0.1:8080/custom-search",
+  "GeminiProxyUrl": "http://127.0.0.1:8080/gemini"
+}
+```
+
+`IgdbProxyUrl` doubles as the backend base URL, so it must be the origin with no path. Debug
+builds copy this file to the output directory; Release and Store builds never do, so local
+settings cannot end up in a submission.
+
+### What the backend exposes
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /classify/programs` | Decides which detected programs are games |
+| `GET /get/main`, `GET /get/program` | Cached game / program metadata |
+| `POST /insert/main`, `POST /insert/program` | Push metadata discovered by a client |
+| `GET /asset/<path>` | Icon binaries cached into Cloud Storage |
+| `POST /gemini`, `GET /custom-search`, `/production/v4/games` | Thin upstream proxies |
+| `GET /health` | Liveness and which features are configured |
+
+`POST /classify/programs` is the one the desktop app leans on. It takes a batch of programs
+with the metadata found on the machine:
+
+```json
+{ "items": [
+  { "detectedName": "Enshrouded", "publisher": "Keen Games GmbH",
+    "launcher": "Steam", "exeName": "unknown" }
+] }
+```
+
+and resolves each one in order - shared cache first, then IGDB, then Gemini - caching every
+verdict, so a second scan of the same library reaches neither upstream service. Programs it
+could not judge come back under `unresolved` rather than as a negative, so the client falls
+back to its own checks instead of trusting a non-answer.
+
+Because a name alone is ambiguous (*Parsec* is both a 1982 TI-99 game and a remote-desktop
+tool), an IGDB name match only counts when the installed publisher corroborates one of the
+IGDB entry's companies. Anything uncorroborated goes to Gemini, which is given the publisher,
+launcher and executable found on the machine and decides from those.
 
 ## Publishing To The Microsoft Store
 
