@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy - Fuzion Dock</title>
+<meta name="description" content="Privacy policy for Fuzion Dock, a game dock for Windows published by Tzar.">
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --text: #1c1c1a;
+    --muted: #5f5f58;
+    --line: #e2e2dc;
+    --accent: #7a5cff;
+    --accent-soft: #f0edff;
+    --code-bg: #f0f0ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131316;
+      --surface: #1c1c20;
+      --text: #ececeb;
+      --muted: #a3a3a0;
+      --line: #2e2e34;
+      --accent: #a690ff;
+      --accent-soft: #232030;
+      --code-bg: #26262c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 36px; }
+  .eyebrow {
+    font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600; margin: 0 0 10px;
+  }
+  h1 { font-size: 34px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.02em; }
+  .dates { color: var(--muted); font-size: 14px; margin: 0; }
+  h2 { font-size: 21px; margin: 44px 0 12px; letter-spacing: -0.01em; padding-top: 4px; }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+  a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  code {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 4px;
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break: break-word;
+  }
+  .summary {
+    background: var(--accent-soft);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin: 0;
+  }
+  .summary p:last-child { margin-bottom: 0; }
+  .table-scroll { overflow-x: auto; margin: 0 0 18px; -webkit-overflow-scrolling: touch; }
+  table {
+    border-collapse: collapse; width: 100%; min-width: 560px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    font-size: 14.5px;
+  }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 650; font-size: 13px; letter-spacing: .02em; color: var(--muted); text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  .never li::marker { color: var(--accent); }
+  footer {
+    margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 14px;
+  }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Fuzion Dock</p>
+  <h1>Privacy Policy</h1>
+  <p class="dates">Last updated: 3 September 2026 &middot; Effective: 3 September 2026</p>
+</header>
+
+<div class="summary">
+  <p><strong>The short version.</strong> Fuzion has no accounts, no sign-in, and no advertising. It does not collect your name, email address, or any other information that identifies you personally. Your game list, icons and settings stay on your PC.</p>
+  <p>Two things do leave your device: the <strong>names of programs Fuzion detects</strong>, so they can be matched against a game database and given the right artwork, and <strong>anonymous "app was opened" usage counts</strong>. Neither is linked to you, and neither is ever sold or used for advertising.</p>
+</div>
+
+<h2>1. Who this policy covers</h2>
+<p>This policy applies to <strong>Fuzion</strong> (also called Fuzion Dock), a game dock application for Windows, published on the Microsoft Store by <strong>Tzar</strong> under Product ID <code>9MTL580GPQ00</code>. It also covers the Fuzion backend service that the app talks to.</p>
+<p>Fuzion is a desktop application. It has no website login, no user profiles, and no way to create an account.</p>
+
+<h2>2. Information that stays on your device</h2>
+<p>Fuzion works by finding the games installed on your PC and showing them in a dock. To do that it reads information from your computer that <em>never leaves it</em>:</p>
+<ul>
+  <li>Installed game launchers and their libraries: Steam, Epic Games, GOG, Battle.net, EA/Origin, Ubisoft Connect, Microsoft Store/UWP apps, and Discord.</li>
+  <li>Locations and file names of program and game executables, so the dock can launch them.</li>
+  <li>Icons and artwork extracted from those executables.</li>
+  <li>Your own settings: dock layout and position, appearance options, gamepad bindings, hidden or blacklisted programs, and any items you added manually.</li>
+</ul>
+<p>This information is stored locally in <code>%LOCALAPPDATA%\Fuzion</code> and <code>%LOCALAPPDATA%\Tzar</code> on your PC. It is not uploaded, backed up, or synchronised anywhere by us.</p>
+<p><strong>Fuzion does not read the contents of your files</strong>, your documents, your browser history, your keystrokes, or anything unrelated to finding and launching games.</p>
+
+<h2>3. Information that is sent over the internet</h2>
+<p>Fuzion is usable entirely offline. When it is online, these are the only things it transmits:</p>
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr><th>What is sent</th><th>Where it goes</th><th>Why</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>The <strong>display name</strong> of a detected program, for example "Hollow Knight". No file paths, no folder listings, no device identifiers.</td>
+      <td>The Fuzion backend, which passes it to IGDB and, if IGDB does not recognise it, to Google Gemini.</td>
+      <td>To decide whether a detected program is actually a game, and to find its correct title.</td>
+    </tr>
+    <tr>
+      <td>Game titles and search terms you type into Fuzion's search box.</td>
+      <td>The Fuzion backend, for artwork lookup via Google Programmable Search, and Steam's public store search.</td>
+      <td>To fetch box art and icons, and to show matching Steam results.</td>
+    </tr>
+    <tr>
+      <td>An anonymous session ping: app started, app closed, app version, operating system version, and a random installation ID generated on your device.</td>
+      <td>Sentry (EU region, Germany).</td>
+      <td>To count how many people use the app and on which Windows versions, so development can be prioritised.</td>
+    </tr>
+    <tr>
+      <td>Nothing. A read-only request is made.</td>
+      <td>The public reddit.com <code>/r/GameDeals</code> feed.</td>
+      <td>To display current game deals.</td>
+    </tr>
+    <tr>
+      <td>Your IP address, as with any internet request.</td>
+      <td>The Fuzion backend and the services listed above.</td>
+      <td>An unavoidable part of how internet connections work. Used only to deliver responses and to apply short-lived, in-memory rate limits.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>About the anonymous usage data</h3>
+<p>Fuzion uses Sentry only for "release health" session counting. Concretely:</p>
+<ul>
+  <li>It records that a session started and ended, along with the app version and OS version.</li>
+  <li>The installation ID is randomly generated and stored on your device. It is not your Windows username, your Microsoft account, or your hardware ID, and it is not derived from them.</li>
+  <li><strong>Crash and error reporting is deliberately switched off.</strong> Fuzion does not send exception details, stack traces, or logs from your machine.</li>
+  <li>Fuzion does not attach your Windows username or any account information to these reports.</li>
+</ul>
+
+<h3>About the game classification data</h3>
+<p>Program names sent for classification are cached on the backend so the same title does not have to be looked up again for anybody. That cache is keyed by the <em>game title itself</em>. It contains no user identifier and no device identifier, and it offers no way to reconstruct who submitted a title or what any one person has installed.</p>
+
+<h2>4. What Fuzion never does</h2>
+<ul class="never">
+  <li>No accounts, sign-ins, passwords, or profiles.</li>
+  <li>No collection of your name, email address, postal address, or phone number.</li>
+  <li>No payment or financial information. Fuzion does not process payments.</li>
+  <li>No advertising, ad networks, ad identifiers, or cross-site tracking.</li>
+  <li>No selling, renting, or sharing of data with data brokers. Ever.</li>
+  <li>No location tracking, and no access to contacts, camera, or microphone.</li>
+  <li>No reading of your documents, photos, emails, browsing history, or keystrokes.</li>
+  <li>No building of an advertising or behavioural profile about you.</li>
+</ul>
+
+<h2>5. Third-party services</h2>
+<p>When the features above are used, data is handled by these providers under their own privacy policies:</p>
+<ul>
+  <li><strong>Google Cloud</strong> hosts the Fuzion backend (Cloud Run, europe-west1) and its cache. <a href="https://cloud.google.com/terms/cloud-privacy-notice" rel="noopener">Privacy notice</a></li>
+  <li><strong>Google Gemini and Google Programmable Search</strong> handle game classification and artwork lookup. <a href="https://policies.google.com/privacy" rel="noopener">Privacy policy</a></li>
+  <li><strong>IGDB / Twitch (Amazon)</strong> provides game metadata. <a href="https://www.twitch.tv/p/legal/privacy-notice/" rel="noopener">Privacy notice</a></li>
+  <li><strong>Sentry (Functional Software, Inc.)</strong> receives the anonymous session counts, stored in the EU. <a href="https://sentry.io/privacy/" rel="noopener">Privacy policy</a></li>
+  <li><strong>Reddit</strong> serves the public game deals feed. <a href="https://www.reddit.com/policies/privacy-policy" rel="noopener">Privacy policy</a></li>
+  <li><strong>Valve / Steam</strong> serves public store search results. <a href="https://store.steampowered.com/privacy_agreement/" rel="noopener">Privacy policy</a></li>
+  <li><strong>Microsoft</strong> distributes and updates the app through the Microsoft Store. <a href="https://privacy.microsoft.com/privacystatement" rel="noopener">Privacy statement</a></li>
+</ul>
+<p>Fuzion sends these services only what is described in section 3, which in practice means game titles.</p>
+
+<h2>6. How long data is kept</h2>
+<ul>
+  <li><strong>On your PC:</strong> for as long as you keep Fuzion installed. You can delete it at any time, see section 7.</li>
+  <li><strong>Backend game-title cache:</strong> kept indefinitely, because it is a shared dictionary of game titles rather than personal data. It contains nothing that identifies you.</li>
+  <li><strong>Anonymous session data:</strong> retained by Sentry under its standard retention period, approximately 90 days, and then deleted.</li>
+  <li><strong>Server request logs:</strong> short-lived operational logs, retained by Google Cloud for a limited period for security and troubleshooting, then automatically deleted.</li>
+</ul>
+
+<h2>7. Your choices and control</h2>
+<ul>
+  <li><strong>Use Fuzion fully offline.</strong> Fuzion falls back to local detection and local icons when it cannot reach the internet. Blocking it in your firewall stops all of the network activity described above, including the anonymous session counts.</li>
+  <li><strong>Delete your local data.</strong> Uninstall Fuzion from Windows Settings, then delete the <code>%LOCALAPPDATA%\Fuzion</code> and <code>%LOCALAPPDATA%\Tzar</code> folders to remove everything Fuzion has stored.</li>
+  <li><strong>Hide programs from the dock.</strong> Blacklisting a program in Fuzion's settings stops it being processed or looked up.</li>
+  <li><strong>Run your own backend.</strong> Fuzion is open source. You can build it from <a href="https://github.com/stomane/fuzion" rel="noopener">the repository</a> and point it at your own server, so no request ever reaches ours.</li>
+</ul>
+<p>Because Fuzion holds no account and no identifier tied to you, there is normally nothing personal for us to look up, export, or delete on request. If you believe we hold data about you and want it removed, contact us using the details in section 11 and we will act on it.</p>
+
+<h2>8. Security</h2>
+<p>All network requests use encrypted HTTPS connections. API credentials for third-party services are held server-side and are never shipped inside the app. The backend stores no user database, no credentials, and no personal records, only a cache of public game information. Access to the backend infrastructure is restricted to the publisher.</p>
+
+<h2>9. Children</h2>
+<p>Fuzion is a general-audience utility and is not directed at children under 13. It does not knowingly collect personal information from children. As described above, it does not knowingly collect personal information from anyone.</p>
+
+<h2>10. Your rights under GDPR, UK GDPR and US privacy laws</h2>
+<p>Where data protection law applies to the limited information described in section 3, the publisher, Tzar, is the data controller. The legal basis is legitimate interest: making the app work correctly and understanding basic usage levels. No data is processed for advertising, and no personal information is sold or shared as those terms are used under the CCPA and CPRA.</p>
+<p>You have the right to ask what is held about you, to request correction or deletion, to object to processing, and to complain to your local data protection authority. Requests can be made using the contact details below.</p>
+
+<h2>11. Contact</h2>
+<p>Questions about this policy, and any privacy request, can be sent to:</p>
+<ul>
+  <li><strong>Email:</strong> <a href="mailto:privacy@fuziondock.com">privacy@fuziondock.com</a></li>
+  <li><strong>Fuzion Discord:</strong> <a href="https://discord.gg/KQRrT6JBUv" rel="noopener">discord.gg/KQRrT6JBUv</a></li>
+  <li><strong>GitHub:</strong> <a href="https://github.com/stomane/fuzion/issues" rel="noopener">github.com/stomane/fuzion/issues</a></li>
+</ul>
+<p>Please include the Product ID <code>9MTL580GPQ00</code> if your message relates to the Microsoft Store listing.</p>
+
+<h2>12. Changes to this policy</h2>
+<p>If this policy changes, the updated version will be published at this address and the "Last updated" date at the top will change. Material changes will also be noted in the app's Microsoft Store listing. The current version is always the one published here.</p>
+
+<footer>
+  <p>Fuzion Dock is published by Tzar. &middot; <a href="https://apps.microsoft.com/detail/9MTL580GPQ00" rel="noopener">Microsoft Store listing</a> &middot; <a href="https://github.com/stomane/fuzion" rel="noopener">Source code</a></p>
+</footer>
+
+</div>
+</body>
+</html>
