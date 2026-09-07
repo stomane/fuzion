@@ -189,7 +189,15 @@ namespace Fuzion.Scanner
 
                     // Set scan finished even when launcher-specific scan code throws.
                     ScanInProgress = false;
-                    CheckGameObjectDBReadyness = loaderTaskIDs.Count == 0;
+
+                    // Arm the database-push poll. This was gated on loaderTaskIDs.Count == 0,
+                    // but icon fetches are fire-and-forget and are always still in flight when
+                    // the scan returns, so the count was never zero here and this was always
+                    // set false. CheckForDatabasePush therefore never ran, and no icon link
+                    // ever reached the shared database - every install re-ran a Google Custom
+                    // Search for icons the backend should already have known about.
+                    // CheckForDatabasePush does the real per-game readiness check itself.
+                    CheckGameObjectDBReadyness = RecentlyAddedGameNames.Count > 0;
                 }
             }
         }

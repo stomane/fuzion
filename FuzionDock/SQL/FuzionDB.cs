@@ -57,6 +57,24 @@ namespace Fuzion.SQL
             public string exeName { get; set; }
         }
 
+        /// <summary>
+        /// Returns the link only when it is an http(s) URL another machine could actually
+        /// fetch. Local paths and empty values come back as empty, which the backend stores
+        /// as null rather than adopting as the shared icon for that title.
+        /// </summary>
+        private static string AsShareableIconLink(string iconUri)
+        {
+            if (string.IsNullOrWhiteSpace(iconUri))
+            {
+                return string.Empty;
+            }
+
+            return Uri.TryCreate(iconUri.Trim(), UriKind.Absolute, out Uri parsed)
+                && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps)
+                ? iconUri.Trim()
+                : string.Empty;
+        }
+
         public static Tuple<string, int> GetIconTuple(string gameName, bool fPositive = false)
         {
             var result = Tuple.Create(string.Empty, 0);
@@ -115,7 +133,11 @@ namespace Fuzion.SQL
                     {
                         gameName = gamesList[i].DisplayName,
                         exeName = gamesList[i].ExeName,
-                        iconLink = gamesList[i].IconURI,
+                        // Only share a real web link. IconURI is a local file path whenever the
+                        // icon came from the executable's own jumbo icon or the no-icon
+                        // placeholder, and pushing "C:\Users\<name>\..." into a database every
+                        // other install reads from would poison it - and leak a username.
+                        iconLink = AsShareableIconLink(gamesList[i].IconURI),
                         iconRelevance = 10
                     });
                 }
