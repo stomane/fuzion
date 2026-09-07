@@ -486,7 +486,10 @@ namespace Fuzion
             // Otherwise this will be stopped from SortGamesFromProgramsAndAddToGrid() if count is 0
             if (RecentlyAddedGameNames.Count > 0)
             {
-                StopAnimatingLoadingRectangle();
+                // Was calling StopAnimatingLoadingRectangle() here on every timer tick, which
+                // force-cleared the loader ticket list while icon fetches were still running.
+                // That was a workaround for tickets that used to leak; they balance on their
+                // own now, so let the loader finish on its own terms.
 
                 // If all newly added gameobjects are database ready, then push to db
                 if (RecentlyAddedGames.All(go => go.DatabaseReady))
