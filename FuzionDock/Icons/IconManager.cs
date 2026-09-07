@@ -158,9 +158,27 @@ namespace Fuzion.Icons
         }
 
         // Used in Program.FetchIcon()
-        public static async Task DownloadIcon(Program program, bool disregardFuzionDB = false) // get best icon main function
+        public static async Task DownloadIcon(Program program, bool disregardFuzionDB = false)
         {
-            MainWindow.AnimateLoadingRectangle(true, "geticon" + program?.IconGUID);
+            // One loader ticket per icon request, released in the finally whichever path the
+            // core method exits through. An early return used to strand the ticket, and since
+            // the loader only stops when the list empties, a single stranded id left the
+            // spinner running forever.
+            string loaderId = "geticon" + program?.IconGUID;
+            MainWindow.AnimateLoadingRectangle(true, loaderId);
+
+            try
+            {
+                await DownloadIconCore(program, disregardFuzionDB).ConfigureAwait(false);
+            }
+            finally
+            {
+                MainWindow.AnimateLoadingRectangle(false, loaderId);
+            }
+        }
+
+        private static async Task DownloadIconCore(Program program, bool disregardFuzionDB = false) // get best icon main function
+        {
 
             #region Tests
             //// Site restricted uri mask
@@ -203,7 +221,9 @@ namespace Fuzion.Icons
                 }
                 catch (Exception)
                 {
-                    _ = DownloadIcon(program, true);
+                    // Retry through the core method so the retry reuses the caller's loader
+                    // ticket instead of opening a second one under the same id.
+                    await DownloadIconCore(program, true).ConfigureAwait(false);
                     return;
                 }
             }
@@ -309,8 +329,6 @@ namespace Fuzion.Icons
             //Console.WriteLine("Icon Fetch Complete, game icon: " + GameObjects.Find(game => game.IconGUID == program.IconGUID).IconURI);
             //Console.WriteLine("Icon Fetch Complete, game icon: " + RecentlyAddedGames.Find(game => game.IconGUID == program.IconGUID).IconURI);
             program.IconFetchComplete = true;
-
-            MainWindow.AnimateLoadingRectangle(false, "geticon" + program?.IconGUID);
         }
 
         public static async Task<string[]> FetchIconLinksAsync(Program program)

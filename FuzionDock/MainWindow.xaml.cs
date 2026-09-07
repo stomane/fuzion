@@ -316,29 +316,35 @@ namespace Fuzion
         /// </summary>
         private void OnForegroundWindowChanged(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
-            var className = new StringBuilder(256);
-            Fuzion.Native.NativeMethods.GetClassName(hwnd, className, className.Capacity);
-            
-            System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Foreground changed to: " + className.ToString() + " (hwnd: " + hwnd + ")`r`n");
-            
-            if (className.ToString() == "Progman" || className.ToString() == "WorkerW")
+            // This runs as a Win32 WinEvent callback, so anything thrown here escapes into
+            // native code and takes the process down with 0xc000041d
+            // (STATUS_FATAL_USER_CALLBACK_EXCEPTION) instead of surfacing as a managed
+            // exception we could handle. Keep the body defensive.
+            try
             {
-                System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " ***DETECTED WorkerW - Setting Topmost***`r`n");
-                // Show Desktop was triggered, keep our window visible by setting Topmost
-                Dispatcher.BeginInvoke(new Action(() =>
+                var className = new StringBuilder(256);
+                Fuzion.Native.NativeMethods.GetClassName(hwnd, className, className.Capacity);
+
+                if (className.ToString() == "Progman" || className.ToString() == "WorkerW")
                 {
-                    Topmost = true;
-                    System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Topmost set to true`r`n");
-                }));
+                    // Show Desktop was triggered, keep our window visible by setting Topmost
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Topmost = true;
+                    }));
+                }
+                else if (Topmost)
+                {
+                    // Another window is foreground, allow normal layering
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Topmost = false;
+                    }));
+                }
             }
-            else if (Topmost)
+            catch
             {
-                System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Non-WorkerW detected while Topmost, resetting`r`n");
-                // Another window is foreground, allow normal layering
-                Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    Topmost = false;
-                }));
+                // Missing one foreground change is not worth taking the app down for.
             }
         }
 
@@ -560,7 +566,9 @@ namespace Fuzion
             }
             else
             {
-                registryKey.DeleteValue("Fuzion");
+                // Two-arg overload: the single-arg form throws if the value is absent, which
+                // it always is on a clean first run with LaunchOnStartup off.
+                registryKey.DeleteValue("Fuzion", false);
             }
         }
 
@@ -878,19 +886,38 @@ namespace Fuzion
 
         public static bool LoaderAnimating { get; private set; }
         public static List<string> loaderTaskIDs = new List<string>(); //change back to private, public only so i can add to watch
+        private static readonly object loaderTaskLock = new object();
 
         public static void AnimateLoadingRectangle(bool animate, string elementName)
         {
             if (animate)
                 Console.WriteLine("Animating Rectangle " + elementName);
 
-            if (animate)
+            // Icon fetches run concurrently, so these come in from several background threads
+            // at once. List<T> is not thread safe - interleaved Add/Remove can drop a removal
+            // and leave the spinner running with nothing left to wait for.
+            int remaining;
+            string remainingIds = null;
+
+            lock (loaderTaskLock)
             {
-                loaderTaskIDs.Add(elementName);
-            }
-            else
-            {
-                loaderTaskIDs.Remove(elementName);
+                if (animate)
+                {
+                    loaderTaskIDs.Add(elementName);
+                }
+                else
+                {
+                    loaderTaskIDs.Remove(elementName);
+                }
+
+                remaining = loaderTaskIDs.Count;
+
+                // A small non-zero count is the interesting case: that is a stall, and the ids
+                // name whichever tasks never reported back.
+                if (remaining > 0 && remaining <= 5)
+                {
+                    remainingIds = string.Join(", ", loaderTaskIDs);
+                }
             }
 
             Application.Current.Dispatcher.Invoke(new Action(() =>
@@ -906,7 +933,7 @@ namespace Fuzion
                 }
 
                 // stop animating because all tasks are gone
-                if (loaderTaskIDs.Count == 0)
+                if (remaining == 0)
                 {
                     loadingRectStoryboard.Stop(AppWindow.LoadingRectangle);
                     AppWindow.LoadingRectangle.BeginStoryboard(loadingRectShrinkStoryboard);
@@ -917,12 +944,16 @@ namespace Fuzion
             }));
 
             Console.WriteLine("Loader task last animate bool: " + animate);
-            Console.WriteLine("Loader Task ID count: " + loaderTaskIDs.Count);
+            Console.WriteLine("Loader Task ID count: " + remaining
+                + (remainingIds == null ? string.Empty : " | still waiting on: " + remainingIds));
         }
 
         public static void StopAnimatingLoadingRectangle()
         {
-            loaderTaskIDs.Clear();
+            lock (loaderTaskLock)
+            {
+                loaderTaskIDs.Clear();
+            }
 
             Application.Current.Dispatcher.Invoke(new Action(() =>
             {

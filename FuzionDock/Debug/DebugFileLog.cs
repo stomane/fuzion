@@ -70,12 +70,12 @@ namespace Fuzion.Debug
             {
                 if (buffer.Length > 0)
                 {
-                    Trace.WriteLine(buffer.ToString() + value);
+                    Emit(buffer.ToString() + value);
                     buffer.Clear();
                 }
                 else
                 {
-                    Trace.WriteLine(value);
+                    Emit(value);
                 }
             }
 
@@ -83,9 +83,23 @@ namespace Fuzion.Debug
             {
                 if (buffer.Length > 0)
                 {
-                    Trace.WriteLine(buffer.ToString());
+                    Emit(buffer.ToString());
                     buffer.Clear();
                 }
+            }
+
+            /// <summary>
+            /// Stamps every line with the time and the managed thread id. Without these a
+            /// stalled log is indistinguishable from a quiet one - the gap between two
+            /// timestamps is what identifies where work actually stopped, and the thread id
+            /// separates the UI thread from the parallel scan workers.
+            /// </summary>
+            private static void Emit(string text)
+            {
+                Trace.WriteLine(
+                    DateTime.Now.ToString("HH:mm:ss.fff")
+                    + " [t" + System.Threading.Thread.CurrentThread.ManagedThreadId.ToString("00") + "] "
+                    + text);
             }
         }
     }

@@ -601,7 +601,7 @@ namespace Fuzion.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0.1")]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
         public double BackgroundOpacity {
             get {
                 return ((double)(this["BackgroundOpacity"]));
@@ -613,7 +613,7 @@ namespace Fuzion.Properties {
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("30")]
         public double BackgroundCornerRadius {
             get {
                 return ((double)(this["BackgroundCornerRadius"]));

@@ -66,16 +66,21 @@ namespace Fuzion.Debug
 
         public override void Write(char value)
         {
-            base.Write(value);
-            textbox.Dispatcher.BeginInvoke(new Action(() =>
-              {
-                  textbox.AppendText(value.ToString(formatProvider));
-              }));
+            Write(value.ToString(formatProvider));
         }
 
         public override void Write(string value)
         {
-            textbox.Text += value;
+            if (string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+
+            // Console output arrives from background threads. `textbox.Text +=` from off the
+            // UI thread throws, and the old per-character BeginInvoke queued one dispatcher
+            // operation per character - enough traffic to starve the UI thread on a chatty
+            // scan. Marshal once per write instead, and never block the caller.
+            textbox.Dispatcher.BeginInvoke(new Action(() => textbox.AppendText(value)));
         }
 
         public override Encoding Encoding
@@ -88,15 +93,33 @@ namespace Fuzion.Debug
     {
         private static void MessageBoxOn_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            //System.Windows.Forms.MessageBox.Show(e.ExceptionObject.ToString());
             Native.ThreadedHook.DisableAllHooks();
+
             // Crash reporting to Sentry is intentionally not wired up yet - usage tracking
             // (Release Health sessions) is opt-out-by-default, but actual crash/error capture
             // should only start once it's exposed as an explicit user opt-in setting.
-            DebugWindow error = new DebugWindow();
-            error.DebugTextBox.Text = e.ExceptionObject.ToString();
-            error.Title = "Exception Stacktrace";
-            error.ShowDialog();
+            Console.WriteLine("Unhandled exception: " + e.ExceptionObject);
+
+#if DEBUG
+            // Debug only. A modal stack-trace window is useful at the desk, but in a shipped
+            // build it parks the process behind a dialog with nobody there to dismiss it -
+            // and ShowDialog off a background thread throws on top of the original fault,
+            // so the user would see a hang rather than the crash.
+            try
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(new Action(() =>
+                {
+                    DebugWindow error = new DebugWindow();
+                    error.DebugTextBox.Text = e.ExceptionObject.ToString();
+                    error.Title = "Exception Stacktrace";
+                    error.ShowDialog();
+                }));
+            }
+            catch (Exception)
+            {
+                // The process is already going down - never fault inside the fault handler.
+            }
+#endif
         }
 
         public static void EnableMessageBoxOnUnhandledException(bool enable)

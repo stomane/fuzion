@@ -252,18 +252,9 @@ namespace Fuzion.Gamepad
             }
         }
 
-        /// <summary>
-        /// Determines whether the specified key is pressed.
-        /// </summary>
-        /// <param name="key">The key.</param>
-        /// <returns>
-        ///   <c>true</c> if the specified key is pressed; otherwise, <c>false</c>.
-        /// </returns>
-        public static bool IsKeyPressed(ConsoleKey key)
-        {
-            Console.WriteLine("Gamepad key: "+key.ToString());
-            return Console.KeyAvailable && Console.ReadKey(true).Key == key;
-        }
+        // Removed: IsKeyPressed(ConsoleKey). It had no callers, and it was a landmine -
+        // Console.KeyAvailable throws InvalidOperationException in a windowed app with no
+        // console attached, and Console.ReadKey blocks waiting for input that never comes.
 
         private const short leftAnalogSensitivity = short.MaxValue / 2;
         //const short rightAnalogSensitivity = 2500;
