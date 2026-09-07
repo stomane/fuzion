@@ -886,19 +886,38 @@ namespace Fuzion
 
         public static bool LoaderAnimating { get; private set; }
         public static List<string> loaderTaskIDs = new List<string>(); //change back to private, public only so i can add to watch
+        private static readonly object loaderTaskLock = new object();
 
         public static void AnimateLoadingRectangle(bool animate, string elementName)
         {
             if (animate)
                 Console.WriteLine("Animating Rectangle " + elementName);
 
-            if (animate)
+            // Icon fetches run concurrently, so these come in from several background threads
+            // at once. List<T> is not thread safe - interleaved Add/Remove can drop a removal
+            // and leave the spinner running with nothing left to wait for.
+            int remaining;
+            string remainingIds = null;
+
+            lock (loaderTaskLock)
             {
-                loaderTaskIDs.Add(elementName);
-            }
-            else
-            {
-                loaderTaskIDs.Remove(elementName);
+                if (animate)
+                {
+                    loaderTaskIDs.Add(elementName);
+                }
+                else
+                {
+                    loaderTaskIDs.Remove(elementName);
+                }
+
+                remaining = loaderTaskIDs.Count;
+
+                // A small non-zero count is the interesting case: that is a stall, and the ids
+                // name whichever tasks never reported back.
+                if (remaining > 0 && remaining <= 5)
+                {
+                    remainingIds = string.Join(", ", loaderTaskIDs);
+                }
             }
 
             Application.Current.Dispatcher.Invoke(new Action(() =>
@@ -914,7 +933,7 @@ namespace Fuzion
                 }
 
                 // stop animating because all tasks are gone
-                if (loaderTaskIDs.Count == 0)
+                if (remaining == 0)
                 {
                     loadingRectStoryboard.Stop(AppWindow.LoadingRectangle);
                     AppWindow.LoadingRectangle.BeginStoryboard(loadingRectShrinkStoryboard);
@@ -925,12 +944,16 @@ namespace Fuzion
             }));
 
             Console.WriteLine("Loader task last animate bool: " + animate);
-            Console.WriteLine("Loader Task ID count: " + loaderTaskIDs.Count);
+            Console.WriteLine("Loader Task ID count: " + remaining
+                + (remainingIds == null ? string.Empty : " | still waiting on: " + remainingIds));
         }
 
         public static void StopAnimatingLoadingRectangle()
         {
-            loaderTaskIDs.Clear();
+            lock (loaderTaskLock)
+            {
+                loaderTaskIDs.Clear();
+            }
 
             Application.Current.Dispatcher.Invoke(new Action(() =>
             {

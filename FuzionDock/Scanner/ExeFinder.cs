@@ -166,7 +166,6 @@ namespace Fuzion.Scanner
                                     }
                                 }
                             }
-                            Console.ReadLine(); // obsolete?
                             streamReader.Close();
                         }
                         catch (WebException)

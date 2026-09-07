@@ -461,7 +461,15 @@ namespace Fuzion.Programs
             }
 
             System.Diagnostics.Debug.WriteLine($"[ProgramToGrid] Processing: {program.DisplayName}");
-            AnimateLoadingRectangle(true, "ptg" + program.IconGUID);
+
+            // Capture the id once. IconGUID can be reassigned further down (ToGame, icon
+            // fetch), and rebuilding the string at release time would then remove a key that
+            // was never added, stranding the ticket and leaving the spinner up forever.
+            string loaderId = "ptg" + program.IconGUID;
+            AnimateLoadingRectangle(true, loaderId);
+
+            try
+            {
             if (GameCheck.IsGame(program))
             {
                 System.Diagnostics.Debug.WriteLine($"[ProgramToGrid] {program.DisplayName}: GAME detected");
@@ -505,8 +513,13 @@ namespace Fuzion.Programs
             {
                 System.Diagnostics.Debug.WriteLine($"[ProgramToGrid] {program.DisplayName}: NOT a game");
             }
-
-            AnimateLoadingRectangle(false, "ptg" + program.IconGUID);
+            }
+            finally
+            {
+                // Runs on Parallel.ForEach worker threads: anything thrown here would
+                // otherwise skip the release and strand the ticket.
+                AnimateLoadingRectangle(false, loaderId);
+            }
         }
     }
 }
