@@ -118,7 +118,6 @@ namespace Fuzion.GameDeals
 
 
 
-            Console.ReadLine();
             streamReader.Close();
 
         }
