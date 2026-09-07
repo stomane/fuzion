@@ -27,7 +27,7 @@
     <PublisherName>Tzar</PublisherName>
     <SuiteName>Fuzion</SuiteName>
     <!-- Keep in step with the Version in FuzionPackaging\Package.appxmanifest -->
-    <ApplicationVersion>0.5.5.0</ApplicationVersion>
+    <ApplicationVersion>0.5.6.0</ApplicationVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>

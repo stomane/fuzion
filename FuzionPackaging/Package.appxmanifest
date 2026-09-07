@@ -13,7 +13,7 @@
   <Identity
     Name="53755Tzar.Fuzion"
     Publisher="CN=68D069E9-F466-43A0-9A2F-2C66D05C4202"
-    Version="0.5.5.0" />
+    Version="0.5.6.0" />
 
   <Properties>
     <!-- Must be a name reserved in Partner Center. The user-visible tile name is
