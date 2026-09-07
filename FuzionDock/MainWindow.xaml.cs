@@ -316,29 +316,35 @@ namespace Fuzion
         /// </summary>
         private void OnForegroundWindowChanged(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
-            var className = new StringBuilder(256);
-            Fuzion.Native.NativeMethods.GetClassName(hwnd, className, className.Capacity);
-            
-            System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Foreground changed to: " + className.ToString() + " (hwnd: " + hwnd + ")`r`n");
-            
-            if (className.ToString() == "Progman" || className.ToString() == "WorkerW")
+            // This runs as a Win32 WinEvent callback, so anything thrown here escapes into
+            // native code and takes the process down with 0xc000041d
+            // (STATUS_FATAL_USER_CALLBACK_EXCEPTION) instead of surfacing as a managed
+            // exception we could handle. Keep the body defensive.
+            try
             {
-                System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " ***DETECTED WorkerW - Setting Topmost***`r`n");
-                // Show Desktop was triggered, keep our window visible by setting Topmost
-                Dispatcher.BeginInvoke(new Action(() =>
+                var className = new StringBuilder(256);
+                Fuzion.Native.NativeMethods.GetClassName(hwnd, className, className.Capacity);
+
+                if (className.ToString() == "Progman" || className.ToString() == "WorkerW")
                 {
-                    Topmost = true;
-                    System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Topmost set to true`r`n");
-                }));
+                    // Show Desktop was triggered, keep our window visible by setting Topmost
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Topmost = true;
+                    }));
+                }
+                else if (Topmost)
+                {
+                    // Another window is foreground, allow normal layering
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Topmost = false;
+                    }));
+                }
             }
-            else if (Topmost)
+            catch
             {
-                System.IO.File.AppendAllText(@"C:\temp\fuzion_debug.txt", DateTime.Now.ToString("HH:mm:ss") + " Non-WorkerW detected while Topmost, resetting`r`n");
-                // Another window is foreground, allow normal layering
-                Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    Topmost = false;
-                }));
+                // Missing one foreground change is not worth taking the app down for.
             }
         }
 
@@ -560,7 +566,9 @@ namespace Fuzion
             }
             else
             {
-                registryKey.DeleteValue("Fuzion");
+                // Two-arg overload: the single-arg form throws if the value is absent, which
+                // it always is on a clean first run with LaunchOnStartup off.
+                registryKey.DeleteValue("Fuzion", false);
             }
         }
 
